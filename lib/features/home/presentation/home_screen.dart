@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../translation/presentation/translation_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -607,15 +608,31 @@ class _TranslationTabState extends State<TranslationTab> {
   }
 
   void _handleTranslation() {
-    if (_translationController.text.trim().isEmpty) return;
+    if (_translationController.text.trim().isEmpty) {
+      // Navigate to empty translation screen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => TranslationScreen(
+            sourceLanguage: _selectedSourceLanguage,
+            targetLanguage: _selectedTargetLanguage,
+          ),
+        ),
+      );
+      return;
+    }
     
-    setState(() => _isTranslating = true);
-    
-    // Simulate translation delay
-    Future.delayed(const Duration(seconds: 2), () {
-      setState(() => _isTranslating = false);
-      _showTranslationResult();
-    });
+    // Navigate to translation screen with pre-filled text
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TranslationScreen(
+          initialText: _translationController.text,
+          sourceLanguage: _selectedSourceLanguage,
+          targetLanguage: _selectedTargetLanguage,
+        ),
+      ),
+    );
   }
 
   void _handleVoiceInput() {
