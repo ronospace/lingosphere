@@ -67,12 +67,14 @@ class TranslationService {
     try {
       // Input validation
       if (text.trim().isEmpty) {
-        throw TranslationException('Text cannot be empty');
+        throw const InvalidTextException('Text cannot be empty');
       }
       
       if (text.length > AppConstants.maxTranslationLength) {
-        throw TranslationException(
-          'Text exceeds maximum length of ${AppConstants.maxTranslationLength} characters'
+        throw TextTooLongException(
+          'Text exceeds maximum length of ${AppConstants.maxTranslationLength} characters',
+          textLength: text.length,
+          maxLength: AppConstants.maxTranslationLength,
         );
       }
       
@@ -143,7 +145,7 @@ class TranslationService {
       }
       
       if (result == null) {
-        throw TranslationException('All translation providers failed');
+        throw const TranslationServiceException('All translation providers failed');
       }
       
       stopwatch.stop();
@@ -163,7 +165,7 @@ class TranslationService {
     } catch (e) {
       _logger.e('Translation failed: $e');
       if (e is TranslationException) rethrow;
-      throw TranslationException('Translation service error: ${e.toString()}');
+      throw TranslationServiceException('Translation service error: ${e.toString()}');
     }
   }
   
@@ -176,11 +178,12 @@ class TranslationService {
         return detectedByPattern;
       }
       
-      // Use Google's language detection
+      // Use Google's language detection via translation
       try {
-        final detection = await _googleTranslator.detect(text);
-        if (detection.confidence > 0.8) {
-          return detection.language;
+        final translation = await _googleTranslator.translate(text, from: 'auto', to: 'en');
+        final detectedLanguage = translation.sourceLanguage.code;
+        if (detectedLanguage != 'auto') {
+          return detectedLanguage;
         }
       } catch (e) {
         _logger.w('Google language detection failed: $e');
@@ -238,7 +241,7 @@ class TranslationService {
     
     final translations = response.data['translations'] as List;
     if (translations.isEmpty) {
-      throw TranslationException('No translation returned from DeepL');
+      throw const TranslationServiceException('No translation returned from DeepL');
     }
     
     final translation = translations.first;
@@ -279,7 +282,7 @@ class TranslationService {
     
     final translations = response.data['data']['translations'] as List;
     if (translations.isEmpty) {
-      throw TranslationException('No translation returned from Google API');
+      throw const TranslationServiceException('No translation returned from Google API');
     }
     
     final translation = translations.first;

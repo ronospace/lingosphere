@@ -40,9 +40,9 @@ class AppTheme {
     colors: [vibrantGreen, successGreen],
   );
   
-  // Typography Scale
-  static const String primaryFontFamily = 'Inter';
-  static const String headingFontFamily = 'Poppins';
+  // Typography Scale - Using system fonts for now
+  static const String? primaryFontFamily = null; // Uses system default
+  static const String? headingFontFamily = null; // Uses system default
   
   // Light Theme
   static ThemeData lightTheme = ThemeData(
@@ -309,7 +309,7 @@ class AppTheme {
     ),
     
     // Card Theme
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: white,
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -340,7 +340,7 @@ class AppTheme {
     ),
     
     // Dialog Theme
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       backgroundColor: white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),

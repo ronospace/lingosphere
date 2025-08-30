@@ -168,11 +168,11 @@ class _LingoSphereAppState extends ConsumerState<LingoSphereApp> with WidgetsBin
       );
       
       // Monitor connectivity changes
-      Connectivity().onConnectivityChanged.listen((result) {
+      Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
         setState(() {
-          _connectivityResult = result.first;
+          _connectivityResult = result;
         });
-        _handleConnectivityChange(result.first);
+        _handleConnectivityChange(result);
       });
       
       // Set system UI overlay style
