@@ -1,0 +1,146 @@
+name: lingosphere
+description: 🌐 LingoSphere - Seamless multilingual group chat translation with AI-powered insights
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI and Icons
+  cupertino_icons: ^1.0.6
+  flutter_svg: ^2.0.9
+  lottie: ^3.0.0
+  shimmer: ^3.0.0
+  
+  # State Management
+  provider: ^6.1.1
+  riverpod: ^2.4.9
+  flutter_riverpod: ^2.4.9
+  
+  # Navigation
+  go_router: ^12.1.3
+  
+  # Firebase Integration
+  firebase_core: ^2.24.2
+  firebase_auth: ^4.15.3
+  cloud_firestore: ^4.13.6
+  firebase_messaging: ^14.7.10
+  firebase_analytics: ^10.7.4
+  firebase_crashlytics: ^3.4.8
+  firebase_storage: ^11.5.6
+  firebase_remote_config: ^4.3.8
+  
+  # Translation & Language Services
+  translator: ^0.1.7
+  intl: ^0.19.0
+  
+  # HTTP and API Integration
+  dio: ^5.4.0
+  http: ^0.13.0
+  
+  # Voice and Audio
+  speech_to_text: ^6.6.0
+  flutter_tts: ^4.0.2
+  audio_waveforms: ^1.0.5
+  
+  # Local Storage & Caching
+  shared_preferences: ^2.2.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.1
+  
+  # Messaging Platform APIs
+  whatsapp_unilink: ^2.1.0
+  url_launcher: ^6.2.2
+  
+  # Utilities
+  uuid: ^4.2.1
+  logger: ^2.0.2+1
+  equatable: ^2.0.5
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+  
+  # UI Enhancement
+  flutter_staggered_animations: ^1.1.1
+  flutter_slidable: ^3.0.1
+  pull_to_refresh: ^2.0.0
+  infinite_scroll_pagination: ^4.0.0
+  
+  # Charts and Visualization
+  fl_chart: ^0.66.0
+  syncfusion_flutter_charts: ^24.1.41
+  
+  # Permissions
+  permission_handler: ^11.1.0
+  
+  # Device Info
+  device_info_plus: ^9.1.1
+  package_info_plus: ^5.0.1
+  
+  # Connectivity
+  connectivity_plus: ^5.0.2
+  
+  # Image and Media
+  cached_network_image: ^3.3.1
+  image_picker: ^1.0.7
+  
+  # Encryption & Security
+  crypto: ^3.0.3
+  encrypt: ^5.0.3
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  
+  # Linting and Code Generation
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.7
+  freezed: ^2.4.6
+  json_serializable: ^6.7.1
+  hive_generator: ^2.0.1
+  
+  # Testing
+  mockito: ^5.4.4
+  integration_test:
+    sdk: flutter
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+  uses-material-design: true
+  
+  # Assets
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/animations/
+    - assets/translations/
+    - assets/audio/
+    
+  # Custom Fonts
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Poppins-Bold.ttf
+          weight: 700
