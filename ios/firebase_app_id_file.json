@@ -1,0 +1,9 @@
+{
+  "file_generated_by": "FlutterFire CLI",
+  "purpose": "Firebase configuration file for iOS",
+  "GOOGLE_APP_ID": "1:701789665843:ios:ca676c0920c8708a1f8146",
+  "FIREBASE_PROJECT_ID": "cyclesync-2025-d2592",
+  "GCM_SENDER_ID": "701789665843",
+  "PLIST_VERSION": "1",
+  "BUNDLE_ID": "com.lingosphere.lingosphere"
+}

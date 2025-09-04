@@ -13,11 +13,16 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logger/logger.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+import 'firebase_options.dart';
 import 'core/constants/app_constants.dart';
+import 'core/navigation/app_navigation.dart';
 import 'core/services/translation_service.dart';
+import 'core/services/firebase_analytics_service.dart';
+import 'core/services/firebase_performance_service.dart';
+import 'core/optimization/app_performance_service.dart';
 import 'shared/theme/app_theme.dart';
 import 'features/onboarding/presentation/splash_screen.dart';
-import 'firebase_options.dart';
+import 'core/providers/app_providers.dart';
 
 // Global logger instance
 final logger = Logger(
@@ -34,13 +39,13 @@ final logger = Logger(
 void main() async {
   // Ensure proper Flutter binding initialization
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize error handling
   await _initializeErrorHandling();
-  
+
   // Initialize core services
   await _initializeCoreServices();
-  
+
   // Run the app with comprehensive error boundary
   runZonedGuarded(
     () => runApp(
@@ -54,13 +59,16 @@ void main() async {
 
 /// Initialize comprehensive error handling and crash reporting
 Future<void> _initializeErrorHandling() async {
+  // Initialize Firebase first
   try {
-    // Initialize Firebase for crash reporting
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     
     // Enable Crashlytics collection
+    await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(true);
+    
+    // Set up Flutter error handling with Firebase
     FlutterError.onError = (errorDetails) {
       logger.e('Flutter Error: ${errorDetails.exceptionAsString()}');
       FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
@@ -73,9 +81,19 @@ Future<void> _initializeErrorHandling() async {
       return true;
     };
     
-    logger.i('Error handling initialized successfully');
+    logger.i('✅ Firebase initialized successfully with project: cyclesync-2025-d2592');
   } catch (e, stackTrace) {
-    logger.e('Failed to initialize error handling: $e', error: e, stackTrace: stackTrace);
+    logger.e('Failed to initialize Firebase: $e');
+    
+    // Fallback to basic error handling
+    FlutterError.onError = (errorDetails) {
+      logger.e('Flutter Error: ${errorDetails.exceptionAsString()}');
+    };
+    
+    PlatformDispatcher.instance.onError = (error, stack) {
+      logger.e('Platform Error: $error');
+      return true;
+    };
   }
 }
 
@@ -84,34 +102,79 @@ Future<void> _initializeCoreServices() async {
   try {
     // Initialize local storage (Hive)
     await Hive.initFlutter();
+
+    // Initialize Firebase Services
+    final analyticsService = FirebaseAnalyticsService();
+    final performanceService = FirebasePerformanceService();
     
-    // Initialize Firebase services
-    await Firebase.initializeApp();
-    await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);
+    await analyticsService.initialize();
+    await performanceService.initialize();
     
+    logger.i('✅ Firebase Analytics and Performance services initialized');
+    
+    // Set user properties
+    await analyticsService.setUserProperty('device_platform', 'flutter_mobile');
+    await analyticsService.setUserProperty('app_name', 'LingoSphere');
+    await analyticsService.setUserProperty('app_version', AppConstants.appVersion);
+
     // Initialize translation service
     await TranslationService().initialize(
-      // API keys should be loaded from secure storage or environment
-      googleApiKey: const String.fromEnvironment('GOOGLE_API_KEY'),
-      deepLApiKey: const String.fromEnvironment('DEEPL_API_KEY'),
-      openAIApiKey: const String.fromEnvironment('OPENAI_API_KEY'),
+      googleApiKey: const String.fromEnvironment('GOOGLE_API_KEY', defaultValue: ''),
+      deepLApiKey: const String.fromEnvironment('DEEPL_API_KEY', defaultValue: ''),
+      openAIApiKey: const String.fromEnvironment('OPENAI_API_KEY', defaultValue: ''),
     );
-    
+
+    // Initialize comprehensive performance service
+    await AppPerformanceService().initialize(
+      enableAdaptiveOptimization: true,
+      enablePerformanceReporting: true, // Now enabled with Firebase
+      reportingInterval: const Duration(minutes: 5),
+      adaptiveCheckInterval: const Duration(seconds: 30),
+    );
+
     // Check network connectivity
     final connectivity = await Connectivity().checkConnectivity();
     logger.i('Network connectivity: $connectivity');
     
-    logger.i('All core services initialized successfully');
+    // Log app initialization to Firebase
+    await analyticsService.logEvent('app_initialized', {
+      'success': true,
+      'connectivity': connectivity.name,
+      'init_time': DateTime.now().millisecondsSinceEpoch,
+      'firebase_project': 'cyclesync-2025-d2592',
+      'services_count': 4,
+    });
+
+    logger.i('All core services initialized successfully with Firebase integration');
   } catch (e, stackTrace) {
-    logger.e('Failed to initialize core services: $e', error: e, stackTrace: stackTrace);
+    logger.e('Failed to initialize core services: $e',
+        error: e, stackTrace: stackTrace);
     
-    // Record non-fatal error for analytics
-    FirebaseCrashlytics.instance.recordError(
-      e,
-      stackTrace,
-      fatal: false,
-      information: ['Service initialization failed'],
-    );
+    // Record non-fatal error to Firebase if available
+    try {
+      await FirebaseCrashlytics.instance.recordError(
+        e,
+        stackTrace,
+        fatal: false,
+        information: ['Service initialization failed'],
+      );
+    } catch (_) {
+      // Firebase not available, continue with local logging
+    }
+    
+    // Log error event to analytics if available
+    try {
+      await FirebaseAnalyticsService().logEvent(
+        'app_initialization_error',
+        {
+          'error': e.toString(),
+          'error_type': e.runtimeType.toString(),
+          'stack_trace': stackTrace.toString().substring(0, 500), // Truncate for analytics
+        },
+      );
+    } catch (_) {
+      // Analytics not available, continue
+    }
   }
 }
 
@@ -119,13 +182,23 @@ Future<void> _initializeCoreServices() async {
 void _handleZoneError(Object error, StackTrace stackTrace) {
   logger.e('Zone Error: $error', error: error, stackTrace: stackTrace);
   
-  // Report to Crashlytics
-  FirebaseCrashlytics.instance.recordError(
-    error,
-    stackTrace,
-    fatal: true,
-    information: ['Uncaught zone error'],
-  );
+  // Report to Firebase Crashlytics
+  try {
+    FirebaseCrashlytics.instance.recordError(
+      error,
+      stackTrace,
+      fatal: true,
+      information: [
+        'Uncaught zone error',
+        'Firebase Project: cyclesync-2025-d2592',
+        'App: LingoSphere',
+        'Time: ${DateTime.now().toIso8601String()}',
+      ],
+    );
+    logger.i('Zone error reported to Firebase Crashlytics');
+  } catch (e) {
+    logger.e('Failed to report zone error to Firebase: $e');
+  }
 }
 
 /// Main LingoSphere application widget with advanced configuration
@@ -136,69 +209,98 @@ class LingoSphereApp extends ConsumerStatefulWidget {
   ConsumerState<LingoSphereApp> createState() => _LingoSphereAppState();
 }
 
-class _LingoSphereAppState extends ConsumerState<LingoSphereApp> with WidgetsBindingObserver {
+class _LingoSphereAppState extends ConsumerState<LingoSphereApp>
+    with WidgetsBindingObserver {
+  ConnectivityResult _connectivityResult = ConnectivityResult.none;
   late FirebaseAnalytics _analytics;
-  late ConnectivityResult _connectivityResult;
-  
+  late FirebaseAnalyticsObserver _observer;
+
   @override
   void initState() {
     super.initState();
     _initializeApp();
   }
-  
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
-  
+
   /// Initialize app-specific configurations
   Future<void> _initializeApp() async {
     try {
       // Add lifecycle observer
       WidgetsBinding.instance.addObserver(this);
-      
+
       // Initialize Firebase Analytics
       _analytics = FirebaseAnalytics.instance;
+      _observer = FirebaseAnalyticsObserver(analytics: _analytics);
       
       // Set initial user properties
+      await _analytics.setUserProperty(
+        name: 'app_name',
+        value: 'LingoSphere',
+      );
+      
       await _analytics.setUserProperty(
         name: 'app_version',
         value: AppConstants.appVersion,
       );
       
-      // Monitor connectivity changes
+      await _analytics.setUserProperty(
+        name: 'user_type',
+        value: 'mobile_user',
+      );
+      
+      // Log app open event
+      await _analytics.logAppOpen();
+      
+      logger.i('✅ Firebase Analytics initialized and app open event logged');
+
+      // Monitor connectivity changes with Firebase analytics
       Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
         setState(() {
           _connectivityResult = result;
         });
+        
+        // Log connectivity changes for analytics
+        _analytics.logEvent(
+          name: 'connectivity_changed',
+          parameters: {
+            'new_status': result.name,
+            'timestamp': DateTime.now().millisecondsSinceEpoch,
+          },
+        );
         _handleConnectivityChange(result);
       });
-      
+
       // Set system UI overlay style
       SystemChrome.setSystemUIOverlayStyle(
-        AppTheme.getSystemUIOverlayStyle(false), // Will be updated based on theme
+        AppTheme.getSystemUIOverlayStyle(
+            false), // Will be updated based on theme
       );
-      
-      logger.i('LingoSphere app initialized successfully');
+
+      logger.i('LingoSphere app initialized successfully with Firebase Analytics');
     } catch (e, stackTrace) {
-      logger.e('Failed to initialize app: $e', error: e, stackTrace: stackTrace);
+      logger.e('Failed to initialize app: $e',
+          error: e, stackTrace: stackTrace);
     }
   }
-  
+
   /// Handle app lifecycle changes
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    
+
     switch (state) {
       case AppLifecycleState.resumed:
         logger.d('App resumed');
-        _analytics.logEvent(name: 'app_resumed');
+        // TODO: _analytics.logEvent(name: 'app_resumed');
         break;
       case AppLifecycleState.paused:
         logger.d('App paused');
-        _analytics.logEvent(name: 'app_paused');
+        // TODO: _analytics.logEvent(name: 'app_paused');
         break;
       case AppLifecycleState.detached:
         logger.d('App detached');
@@ -211,73 +313,80 @@ class _LingoSphereAppState extends ConsumerState<LingoSphereApp> with WidgetsBin
         break;
     }
   }
-  
+
   /// Handle connectivity changes
   void _handleConnectivityChange(ConnectivityResult result) {
     logger.i('Connectivity changed: $result');
-    
-    _analytics.logEvent(
-      name: 'connectivity_changed',
-      parameters: {
-        'connection_type': result.toString(),
-        'has_internet': result != ConnectivityResult.none,
-      },
-    );
+
+    // TODO: Re-enable after Firebase setup
+    // _analytics.logEvent(
+    //   name: 'connectivity_changed',
+    //   parameters: {
+    //     'connection_type': result.toString(),
+    //     'has_internet': result != ConnectivityResult.none,
+    //   },
+    // );
   }
-  
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      // App Configuration
-      title: AppConstants.appName,
-      debugShowCheckedModeBanner: false,
-      
-      // Theme Configuration
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system, // Will be managed by state later
-      
-      // Localization (will be enhanced later)
-      locale: const Locale('en', 'US'),
-      supportedLocales: const [
-        Locale('en', 'US'),
-        Locale('es', 'ES'),
-        Locale('fr', 'FR'),
-        Locale('de', 'DE'),
-        Locale('it', 'IT'),
-        Locale('pt', 'PT'),
-        Locale('ru', 'RU'),
-        Locale('ja', 'JP'),
-        Locale('ko', 'KR'),
-        Locale('zh', 'CN'),
-      ],
-      
-      // Navigation Configuration
-      home: const SplashScreen(),
-      
-      // Analytics Navigation Observer
-      navigatorObservers: [
-        FirebaseAnalyticsObserver(analytics: _analytics),
-      ],
-      
-      // Error Handling
-      builder: (context, widget) {
-        // Handle errors in widget tree
-        ErrorWidget.builder = (FlutterErrorDetails errorDetails) {
-          return _buildErrorWidget(context, errorDetails);
-        };
-        
-        // Return the normal widget tree
-        return widget ?? const SizedBox.shrink();
-      },
+    return ServiceStatusListener(
+      child: MaterialApp(
+        // App Configuration
+        title: AppConstants.appName,
+        debugShowCheckedModeBanner: false,
+
+        // Theme Configuration
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: ThemeMode.system, // Will be managed by state later
+
+        // Localization (will be enhanced later)
+        locale: const Locale('en', 'US'),
+        supportedLocales: const [
+          Locale('en', 'US'),
+          Locale('es', 'ES'),
+          Locale('fr', 'FR'),
+          Locale('de', 'DE'),
+          Locale('it', 'IT'),
+          Locale('pt', 'PT'),
+          Locale('ru', 'RU'),
+          Locale('ja', 'JP'),
+          Locale('ko', 'KR'),
+          Locale('zh', 'CN'),
+        ],
+
+        // Navigation Configuration
+        home: const SplashScreen(),
+
+        // Named routes
+        onGenerateRoute: AppRouteGenerator.generateRoute,
+
+        // Analytics Navigation Observer
+        navigatorObservers: [
+          _observer,
+        ],
+
+        // Error Handling
+        builder: (context, widget) {
+          // Handle errors in widget tree
+          ErrorWidget.builder = (FlutterErrorDetails errorDetails) {
+            return _buildErrorWidget(context, errorDetails);
+          };
+
+          // Return the normal widget tree
+          return widget ?? const SizedBox.shrink();
+        },
+      ),
     );
   }
-  
+
   /// Build custom error widget for better user experience
-  Widget _buildErrorWidget(BuildContext context, FlutterErrorDetails errorDetails) {
+  Widget _buildErrorWidget(
+      BuildContext context, FlutterErrorDetails errorDetails) {
     // Log the error
     logger.e('Widget Error: ${errorDetails.exceptionAsString()}');
-    
+
     // Return user-friendly error widget
     return MaterialApp(
       theme: AppTheme.lightTheme,
@@ -310,17 +419,17 @@ class _LingoSphereAppState extends ConsumerState<LingoSphereApp> with WidgetsBin
                 Text(
                   'Oops! Something went wrong',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: AppTheme.gray900,
-                    fontWeight: FontWeight.w600,
-                  ),
+                        color: AppTheme.gray900,
+                        fontWeight: FontWeight.w600,
+                      ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'We\'re working to fix this issue. Please restart the app.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.gray600,
-                  ),
+                        color: AppTheme.gray600,
+                      ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),

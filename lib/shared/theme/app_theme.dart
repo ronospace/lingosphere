@@ -12,7 +12,7 @@ class AppTheme {
   static const Color warningAmber = Color(0xFFF59E0B);
   static const Color errorRed = Color(0xFFEF4444);
   static const Color successGreen = Color(0xFF10B981);
-  
+
   // Neutral Colors
   static const Color white = Color(0xFFFFFFFF);
   static const Color black = Color(0xFF000000);
@@ -26,30 +26,35 @@ class AppTheme {
   static const Color gray700 = Color(0xFF374151);
   static const Color gray800 = Color(0xFF1F2937);
   static const Color gray900 = Color(0xFF111827);
-  
+
+  // Additional Brand Colors (for UI components)
+  static const Color backgroundDark = gray900;
+  static const Color twitterBlue = Color(0xFF1DA1F2);
+  static const Color vibrantOrange = Color(0xFFFF6B35);
+
   // Gradient Colors
   static const LinearGradient primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [primaryBlue, accentTeal],
   );
-  
+
   static const LinearGradient successGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [vibrantGreen, successGreen],
   );
-  
+
   // Typography Scale - Using system fonts for now
   static const String? primaryFontFamily = null; // Uses system default
   static const String? headingFontFamily = null; // Uses system default
-  
+
   // Light Theme
   static ThemeData lightTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
     fontFamily: primaryFontFamily,
-    
+
     // Color Scheme
     colorScheme: const ColorScheme.light(
       primary: primaryBlue,
@@ -77,7 +82,7 @@ class AppTheme {
       outlineVariant: gray200,
       scrim: Colors.black54,
     ),
-    
+
     // App Bar Theme
     appBarTheme: const AppBarTheme(
       backgroundColor: white,
@@ -94,7 +99,7 @@ class AppTheme {
       iconTheme: IconThemeData(color: gray700),
       actionsIconTheme: IconThemeData(color: gray700),
     ),
-    
+
     // Text Theme
     textTheme: const TextTheme(
       // Display styles
@@ -119,7 +124,7 @@ class AppTheme {
         color: gray900,
         height: 1.3,
       ),
-      
+
       // Headline styles
       headlineLarge: TextStyle(
         fontFamily: headingFontFamily,
@@ -142,7 +147,7 @@ class AppTheme {
         color: gray900,
         height: 1.4,
       ),
-      
+
       // Title styles
       titleLarge: TextStyle(
         fontFamily: primaryFontFamily,
@@ -165,7 +170,7 @@ class AppTheme {
         color: gray700,
         height: 1.5,
       ),
-      
+
       // Body styles
       bodyLarge: TextStyle(
         fontFamily: primaryFontFamily,
@@ -188,7 +193,7 @@ class AppTheme {
         color: gray600,
         height: 1.6,
       ),
-      
+
       // Label styles
       labelLarge: TextStyle(
         fontFamily: primaryFontFamily,
@@ -212,7 +217,7 @@ class AppTheme {
         height: 1.4,
       ),
     ),
-    
+
     // Button Themes
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
@@ -231,7 +236,7 @@ class AppTheme {
         ),
       ),
     ),
-    
+
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: vibrantGreen,
@@ -247,7 +252,7 @@ class AppTheme {
         ),
       ),
     ),
-    
+
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: primaryBlue,
@@ -263,7 +268,7 @@ class AppTheme {
         ),
       ),
     ),
-    
+
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: primaryBlue,
@@ -278,7 +283,7 @@ class AppTheme {
         ),
       ),
     ),
-    
+
     // Input Decoration Theme
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -307,7 +312,7 @@ class AppTheme {
       hintStyle: const TextStyle(color: gray500),
       labelStyle: const TextStyle(color: gray700),
     ),
-    
+
     // Card Theme
     cardTheme: CardThemeData(
       color: white,
@@ -318,7 +323,7 @@ class AppTheme {
       ),
       margin: EdgeInsets.zero,
     ),
-    
+
     // Bottom Navigation Bar Theme
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
       backgroundColor: white,
@@ -338,7 +343,7 @@ class AppTheme {
         fontWeight: FontWeight.normal,
       ),
     ),
-    
+
     // Dialog Theme
     dialogTheme: DialogThemeData(
       backgroundColor: white,
@@ -347,7 +352,7 @@ class AppTheme {
       ),
       elevation: 8,
     ),
-    
+
     // Snack Bar Theme
     snackBarTheme: SnackBarThemeData(
       backgroundColor: gray800,
@@ -360,7 +365,7 @@ class AppTheme {
       ),
       behavior: SnackBarBehavior.floating,
     ),
-    
+
     // Chip Theme
     chipTheme: ChipThemeData(
       backgroundColor: gray100,
@@ -380,7 +385,7 @@ class AppTheme {
         borderRadius: BorderRadius.circular(20),
       ),
     ),
-    
+
     // Floating Action Button Theme
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
       backgroundColor: vibrantGreen,
@@ -388,14 +393,14 @@ class AppTheme {
       elevation: 4,
       shape: CircleBorder(),
     ),
-    
+
     // Progress Indicator Theme
     progressIndicatorTheme: const ProgressIndicatorThemeData(
       color: primaryBlue,
       linearTrackColor: gray200,
       circularTrackColor: gray200,
     ),
-    
+
     // Switch Theme
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((states) {
@@ -406,19 +411,19 @@ class AppTheme {
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return vibrantGreen.withOpacity(0.5);
+          return vibrantGreen.withValues(alpha: 0.5);
         }
         return gray300;
       }),
     ),
   );
-  
+
   // Dark Theme
   static ThemeData darkTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
     fontFamily: primaryFontFamily,
-    
+
     // Color Scheme
     colorScheme: const ColorScheme.dark(
       primary: vibrantGreen,
@@ -446,7 +451,7 @@ class AppTheme {
       outlineVariant: gray700,
       scrim: Colors.black87,
     ),
-    
+
     // App Bar Theme
     appBarTheme: const AppBarTheme(
       backgroundColor: gray900,
@@ -463,11 +468,11 @@ class AppTheme {
       iconTheme: IconThemeData(color: gray300),
       actionsIconTheme: IconThemeData(color: gray300),
     ),
-    
+
     // Override other theme properties for dark mode...
     // (Similar structure as light theme but with dark colors)
   );
-  
+
   // Custom Color Extensions
   static const Color translationHighlight = Color(0xFFECFEFF);
   static const Color voiceRecording = Color(0xFFFEF3C7);
@@ -475,7 +480,7 @@ class AppTheme {
   static const Color sentimentPositive = Color(0xFFECFDF5);
   static const Color sentimentNegative = Color(0xFFFEF2F2);
   static const Color sentimentNeutral = Color(0xFFF9FAFB);
-  
+
   // Platform-specific adaptations
   static SystemUiOverlayStyle getSystemUIOverlayStyle(bool isDark) {
     return SystemUiOverlayStyle(
@@ -483,7 +488,8 @@ class AppTheme {
       statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
       systemNavigationBarColor: isDark ? gray900 : white,
-      systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+      systemNavigationBarIconBrightness:
+          isDark ? Brightness.light : Brightness.dark,
     );
   }
 }
@@ -495,7 +501,7 @@ class AppTextStyles {
     height: 1.4,
     fontFamily: AppTheme.primaryFontFamily,
   );
-  
+
   static const TextStyle translationText = TextStyle(
     fontSize: 14,
     height: 1.4,
@@ -503,20 +509,20 @@ class AppTextStyles {
     fontFamily: AppTheme.primaryFontFamily,
     color: AppTheme.gray600,
   );
-  
+
   static const TextStyle confidenceScore = TextStyle(
     fontSize: 11,
     fontWeight: FontWeight.w600,
     fontFamily: AppTheme.primaryFontFamily,
   );
-  
+
   static const TextStyle languageTag = TextStyle(
     fontSize: 10,
     fontWeight: FontWeight.w500,
     fontFamily: AppTheme.primaryFontFamily,
     letterSpacing: 0.5,
   );
-  
+
   static const TextStyle timestamp = TextStyle(
     fontSize: 11,
     color: AppTheme.gray500,

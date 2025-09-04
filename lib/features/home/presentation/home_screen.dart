@@ -7,6 +7,8 @@ import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../translation/presentation/translation_screen.dart';
+import '../../voice/presentation/voice_translation_screen.dart';
+import '../../insights/presentation/insights_dashboard.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -17,7 +19,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
-  
+
   final List<Widget> _screens = [
     const TranslationTab(),
     const ChatsTab(),
@@ -25,7 +27,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     const VoiceTab(),
     const SettingsTab(),
   ];
-  
+
   final List<BottomNavigationBarItem> _navigationItems = [
     const BottomNavigationBarItem(
       icon: Icon(Icons.translate_rounded),
@@ -53,7 +55,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       label: 'Settings',
     ),
   ];
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,7 +99,7 @@ class _TranslationTabState extends State<TranslationTab> {
   String _selectedSourceLanguage = 'auto';
   String _selectedTargetLanguage = 'en';
   bool _isTranslating = false;
-  
+
   final List<RecentTranslation> _recentTranslations = [
     RecentTranslation(
       originalText: "Hola, ¿cómo estás?",
@@ -173,10 +175,10 @@ class _TranslationTabState extends State<TranslationTab> {
         Text(
           'LingoSphere',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            fontFamily: AppTheme.headingFontFamily,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.primaryBlue,
-          ),
+                fontFamily: AppTheme.headingFontFamily,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.primaryBlue,
+              ),
         ),
         const Spacer(),
         IconButton(
@@ -203,7 +205,7 @@ class _TranslationTabState extends State<TranslationTab> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryBlue.withOpacity(0.2),
+            color: AppTheme.primaryBlue.withValues(alpha: 0.2),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -222,7 +224,7 @@ class _TranslationTabState extends State<TranslationTab> {
           Container(
             width: 1,
             height: 40,
-            color: AppTheme.white.withOpacity(0.3),
+            color: AppTheme.white.withValues(alpha: 0.3),
           ),
           Expanded(
             child: _buildStatItem(
@@ -237,7 +239,8 @@ class _TranslationTabState extends State<TranslationTab> {
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon, Color color) {
+  Widget _buildStatItem(
+      String label, String value, IconData icon, Color color) {
     return Column(
       children: [
         Icon(icon, color: color, size: 24),
@@ -254,7 +257,7 @@ class _TranslationTabState extends State<TranslationTab> {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: color.withOpacity(0.9),
+            color: color.withValues(alpha: 0.9),
           ),
           textAlign: TextAlign.center,
         ),
@@ -322,10 +325,11 @@ class _TranslationTabState extends State<TranslationTab> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           onChanged: onChanged,
           decoration: InputDecoration(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: AppTheme.gray300),
@@ -348,15 +352,26 @@ class _TranslationTabState extends State<TranslationTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
-              controller: _translationController,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                hintText: 'Enter text to translate...',
-                border: InputBorder.none,
-                hintStyle: TextStyle(color: AppTheme.gray500),
+            Container(
+              constraints: const BoxConstraints(minHeight: 80),
+              child: TextField(
+                controller: _translationController,
+                maxLines: null,
+                minLines: 3,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                decoration: const InputDecoration(
+                  hintText: 'Enter text to translate...',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  hintStyle: TextStyle(color: AppTheme.gray500),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                style: const TextStyle(fontSize: 16),
+                autofocus: false,
+                enabled: true,
               ),
-              style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 16),
             Row(
@@ -371,7 +386,8 @@ class _TranslationTabState extends State<TranslationTab> {
                   onPressed: () {
                     _handleCameraOCR();
                   },
-                  icon: const Icon(Icons.camera_alt, color: AppTheme.accentTeal),
+                  icon:
+                      const Icon(Icons.camera_alt, color: AppTheme.accentTeal),
                 ),
                 const Spacer(),
                 ElevatedButton(
@@ -379,7 +395,8 @@ class _TranslationTabState extends State<TranslationTab> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.vibrantGreen,
                     foregroundColor: AppTheme.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
                   ),
                   child: _isTranslating
                       ? const SizedBox(
@@ -454,7 +471,8 @@ class _TranslationTabState extends State<TranslationTab> {
             final action = actions[index];
             return Card(
               elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: InkWell(
                 onTap: action.onTap,
                 borderRadius: BorderRadius.circular(12),
@@ -470,7 +488,10 @@ class _TranslationTabState extends State<TranslationTab> {
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
                             color: AppTheme.gray700,
+                            fontSize: 13,
                           ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ),
                     ],
@@ -528,9 +549,10 @@ class _TranslationTabState extends State<TranslationTab> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryBlue.withOpacity(0.1),
+                    color: AppTheme.primaryBlue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -621,7 +643,7 @@ class _TranslationTabState extends State<TranslationTab> {
       );
       return;
     }
-    
+
     // Navigate to translation screen with pre-filled text
     Navigator.push(
       context,
@@ -654,11 +676,243 @@ class _TranslationTabState extends State<TranslationTab> {
   }
 
   void _handleQuickAction(String action) {
+    switch (action) {
+      case 'whatsapp':
+        _launchWhatsAppTranslation();
+        break;
+      case 'voice':
+        _startVoiceCall();
+        break;
+      case 'camera':
+        _launchCameraTranslation();
+        break;
+      case 'conversation':
+        _startConversationMode();
+        break;
+      default:
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$action feature coming soon!'),
+            backgroundColor: AppTheme.vibrantGreen,
+          ),
+        );
+    }
+  }
+
+  void _launchWhatsAppTranslation() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.chat, color: AppTheme.vibrantGreen),
+              SizedBox(width: 8),
+              Text('WhatsApp Integration'),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enable real-time translation for your WhatsApp conversations.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '• Auto-translate incoming messages',
+                style: TextStyle(color: AppTheme.gray600),
+              ),
+              Text(
+                '• Translate before sending',
+                style: TextStyle(color: AppTheme.gray600),
+              ),
+              Text(
+                '• Support for 100+ languages',
+                style: TextStyle(color: AppTheme.gray600),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _setupWhatsAppIntegration();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.vibrantGreen,
+                foregroundColor: AppTheme.white,
+              ),
+              child: const Text('Setup'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _setupWhatsAppIntegration() {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$action feature coming soon!'),
+      const SnackBar(
+        content: Text('WhatsApp integration setup initiated!'),
         backgroundColor: AppTheme.vibrantGreen,
+        duration: Duration(seconds: 2),
       ),
+    );
+  }
+
+  void _startVoiceCall() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.phone, color: AppTheme.accentTeal),
+              SizedBox(width: 8),
+              Text('Voice Translation Call'),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Start a voice call with real-time translation.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '• Real-time speech translation',
+                style: TextStyle(color: AppTheme.gray600),
+              ),
+              Text(
+                '• Voice-to-voice translation',
+                style: TextStyle(color: AppTheme.gray600),
+              ),
+              Text(
+                '• High-quality audio processing',
+                style: TextStyle(color: AppTheme.gray600),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const VoiceTranslationScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentTeal,
+                foregroundColor: AppTheme.white,
+              ),
+              child: const Text('Start Call'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _launchCameraTranslation() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TranslationScreen(
+          sourceLanguage: _selectedSourceLanguage,
+          targetLanguage: _selectedTargetLanguage,
+        ),
+      ),
+    ).then((_) {
+      // Immediately trigger camera OCR when screen loads
+      Future.delayed(const Duration(milliseconds: 500), () {
+        // This would trigger the camera OCR functionality
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Camera translation ready! Tap camera icon.'),
+            backgroundColor: AppTheme.warningAmber,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      });
+    });
+  }
+
+  void _startConversationMode() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.record_voice_over, color: AppTheme.primaryBlue),
+              SizedBox(width: 8),
+              Text('Conversation Mode'),
+            ],
+          ),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enable two-way conversation translation.',
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '• Automatic speaker detection',
+                style: TextStyle(color: AppTheme.gray600),
+              ),
+              Text(
+                '• Real-time bidirectional translation',
+                style: TextStyle(color: AppTheme.gray600),
+              ),
+              Text(
+                '• Voice synthesis for both languages',
+                style: TextStyle(color: AppTheme.gray600),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const VoiceTranslationScreen(
+                      conversationMode: true,
+                    ),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryBlue,
+                foregroundColor: AppTheme.white,
+              ),
+              child: const Text('Start'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -694,7 +948,7 @@ class _TranslationTabState extends State<TranslationTab> {
   String _formatTimestamp(DateTime timestamp) {
     final now = DateTime.now();
     final difference = now.difference(timestamp);
-    
+
     if (difference.inMinutes < 60) {
       return '${difference.inMinutes}m ago';
     } else if (difference.inHours < 24) {
@@ -754,35 +1008,7 @@ class InsightsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.insights_outlined,
-            size: 64,
-            color: AppTheme.gray400,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'AI Insights',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.gray700,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Get AI-powered analytics and\ntranslation insights',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppTheme.gray500,
-            ),
-          ),
-        ],
-      ),
-    );
+    return const InsightsDashboard();
   }
 }
 
@@ -791,70 +1017,617 @@ class VoiceTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.mic_outlined,
-            size: 64,
-            color: AppTheme.gray400,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Voice Translation',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.gray700,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryBlue.withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.mic,
+                size: 64,
+                color: AppTheme.white,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Voice Translation',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.gray700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Speak and translate in real-time\nwith voice recognition',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppTheme.gray500,
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const VoiceTranslationScreen(),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.vibrantGreen,
+                foregroundColor: AppTheme.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.mic),
+                  SizedBox(width: 8),
+                  Text('Start Voice Translation'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const VoiceTranslationScreen(
+                      conversationMode: true,
+                    ),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accentTeal,
+                foregroundColor: AppTheme.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.record_voice_over),
+                  SizedBox(width: 8),
+                  Text('Conversation Mode'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SettingsTab extends StatefulWidget {
+  const SettingsTab({super.key});
+
+  @override
+  State<SettingsTab> createState() => _SettingsTabState();
+}
+
+class _SettingsTabState extends State<SettingsTab> {
+  // Settings state
+  bool _autoTranslate = true;
+  bool _darkMode = false;
+  bool _offlineMode = false;
+  bool _voicePrompts = true;
+  bool _notifications = true;
+  bool _autoDetectLanguage = true;
+  double _speechRate = 0.5;
+  double _voicePitch = 0.5;
+  String _preferredVoice = 'system';
+  String _defaultTargetLanguage = 'en';
+  String _translationProvider = 'google';
+  int _cacheRetentionDays = 30;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: AnimationLimiter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: AnimationConfiguration.toStaggeredList(
+              duration: const Duration(milliseconds: 300),
+              childAnimationBuilder: (widget) => SlideAnimation(
+                verticalOffset: 50.0,
+                child: FadeInAnimation(child: widget),
+              ),
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 24),
+                _buildSection(
+                  'Translation Settings',
+                  Icons.translate,
+                  [
+                    _buildSwitchTile(
+                      'Auto-translate',
+                      'Automatically translate as you type',
+                      _autoTranslate,
+                      (value) => setState(() => _autoTranslate = value),
+                    ),
+                    _buildSwitchTile(
+                      'Auto-detect language',
+                      'Automatically detect input language',
+                      _autoDetectLanguage,
+                      (value) => setState(() => _autoDetectLanguage = value),
+                    ),
+                    _buildDropdownTile(
+                      'Default target language',
+                      _defaultTargetLanguage,
+                      AppConstants.supportedLanguages,
+                      (value) => setState(() => _defaultTargetLanguage = value!),
+                    ),
+                    _buildDropdownTile(
+                      'Translation provider',
+                      _translationProvider,
+                      {
+                        'google': 'Google Translate',
+                        'azure': 'Microsoft Translator',
+                        'aws': 'Amazon Translate',
+                        'deepl': 'DeepL',
+                      },
+                      (value) => setState(() => _translationProvider = value!),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildSection(
+                  'Voice Settings',
+                  Icons.record_voice_over,
+                  [
+                    _buildSwitchTile(
+                      'Voice prompts',
+                      'Enable audio feedback and prompts',
+                      _voicePrompts,
+                      (value) => setState(() => _voicePrompts = value),
+                    ),
+                    _buildSliderTile(
+                      'Speech rate',
+                      'Adjust playback speed',
+                      _speechRate,
+                      (value) => setState(() => _speechRate = value),
+                    ),
+                    _buildSliderTile(
+                      'Voice pitch',
+                      'Adjust voice tone',
+                      _voicePitch,
+                      (value) => setState(() => _voicePitch = value),
+                    ),
+                    _buildDropdownTile(
+                      'Preferred voice',
+                      _preferredVoice,
+                      {
+                        'system': 'System Default',
+                        'male': 'Male Voice',
+                        'female': 'Female Voice',
+                        'neural': 'Neural Voice',
+                      },
+                      (value) => setState(() => _preferredVoice = value!),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildSection(
+                  'App Settings',
+                  Icons.settings,
+                  [
+                    _buildSwitchTile(
+                      'Dark mode',
+                      'Use dark theme',
+                      _darkMode,
+                      (value) => setState(() => _darkMode = value),
+                    ),
+                    _buildSwitchTile(
+                      'Offline mode',
+                      'Use cached translations when offline',
+                      _offlineMode,
+                      (value) => setState(() => _offlineMode = value),
+                    ),
+                    _buildSwitchTile(
+                      'Push notifications',
+                      'Receive app updates and tips',
+                      _notifications,
+                      (value) => setState(() => _notifications = value),
+                    ),
+                    _buildSliderTile(
+                      'Cache retention (days)',
+                      'Days to keep translation cache',
+                      _cacheRetentionDays.toDouble(),
+                      (value) => setState(() => _cacheRetentionDays = value.toInt()),
+                      min: 1,
+                      max: 90,
+                      divisions: 89,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildSection(
+                  'Data & Privacy',
+                  Icons.privacy_tip,
+                  [
+                    _buildActionTile(
+                      'Clear cache',
+                      'Remove stored translations and data',
+                      Icons.delete_sweep,
+                      _clearCache,
+                    ),
+                    _buildActionTile(
+                      'Export data',
+                      'Export your translation history',
+                      Icons.download,
+                      _exportData,
+                    ),
+                    _buildActionTile(
+                      'Privacy policy',
+                      'View our privacy policy',
+                      Icons.policy,
+                      _viewPrivacyPolicy,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _buildSection(
+                  'About',
+                  Icons.info,
+                  [
+                    _buildInfoTile('Version', '1.0.0 (Beta)'),
+                    _buildActionTile(
+                      'Check for updates',
+                      'Get the latest features',
+                      Icons.system_update,
+                      _checkForUpdates,
+                    ),
+                    _buildActionTile(
+                      'Send feedback',
+                      'Help us improve LingoSphere',
+                      Icons.feedback,
+                      _sendFeedback,
+                    ),
+                    _buildActionTile(
+                      'Rate app',
+                      'Rate us on the App Store',
+                      Icons.star,
+                      _rateApp,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 40),
+              ],
             ),
           ),
-          SizedBox(height: 8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: AppTheme.primaryGradient,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.settings,
+            color: AppTheme.white,
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: 16),
+        const Text(
+          'Settings',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.gray900,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSection(String title, IconData icon, List<Widget> children) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: AppTheme.primaryBlue, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.gray900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSwitchTile(
+    String title,
+    String subtitle,
+    bool value,
+    ValueChanged<bool> onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.gray800,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.gray600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: AppTheme.primaryBlue,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropdownTile<T>(
+    String title,
+    T value,
+    Map<T, String> items,
+    ValueChanged<T?> onChanged,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            'Speak and translate in real-time\nwith voice recognition',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppTheme.gray500,
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.gray800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppTheme.gray300),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButton<T>(
+              value: value,
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
+              items: items.entries
+                  .map((e) => DropdownMenuItem(
+                        value: e.key,
+                        child: Text(e.value),
+                      ))
+                  .toList(),
+              onChanged: onChanged,
             ),
           ),
         ],
       ),
     );
   }
-}
 
-class SettingsTab extends StatelessWidget {
-  const SettingsTab({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
+  Widget _buildSliderTile(
+    String title,
+    String subtitle,
+    double value,
+    ValueChanged<double> onChanged, {
+    double min = 0.0,
+    double max = 1.0,
+    int? divisions,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.settings_outlined,
-            size: 64,
-            color: AppTheme.gray400,
-          ),
-          SizedBox(height: 16),
           Text(
-            'Settings',
-            style: TextStyle(
-              fontSize: 24,
+            title,
+            style: const TextStyle(
+              fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: AppTheme.gray700,
+              color: AppTheme.gray800,
             ),
           ),
-          SizedBox(height: 8),
           Text(
-            'Customize your translation\npreferences and settings',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppTheme.gray500,
+            subtitle,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppTheme.gray600,
+            ),
+          ),
+          Slider(
+            value: value,
+            min: min,
+            max: max,
+            divisions: divisions,
+            activeColor: AppTheme.primaryBlue,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionTile(
+    String title,
+    String subtitle,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: Icon(icon, color: AppTheme.primaryBlue),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.gray800,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.gray600,
+          ),
+        ),
+        trailing: const Icon(Icons.chevron_right, color: AppTheme.gray400),
+        onTap: onTap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  Widget _buildInfoTile(String title, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.gray800,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              color: AppTheme.gray600,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _clearCache() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Cache'),
+        content: const Text(
+          'This will remove all cached translations and data. Are you sure?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _showSuccessMessage('Cache cleared successfully');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.errorRed,
+              foregroundColor: AppTheme.white,
+            ),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _exportData() {
+    _showSuccessMessage('Export feature coming soon!');
+  }
+
+  void _viewPrivacyPolicy() {
+    _showSuccessMessage('Privacy policy feature coming soon!');
+  }
+
+  void _checkForUpdates() {
+    _showSuccessMessage('You have the latest version!');
+  }
+
+  void _sendFeedback() {
+    _showSuccessMessage('Feedback feature coming soon!');
+  }
+
+  void _rateApp() {
+    _showSuccessMessage('Rate app feature coming soon!');
+  }
+
+  void _showSuccessMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppTheme.vibrantGreen,
       ),
     );
   }

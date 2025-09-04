@@ -71,7 +71,8 @@ void main() {
       expect(detectedLanguage, isA<String>());
     });
 
-    test('should return same text for same source and target language', () async {
+    test('should return same text for same source and target language',
+        () async {
       // Arrange
       const text = "Hello world";
       const language = "en";
@@ -132,12 +133,12 @@ void main() {
         text: positiveText,
         targetLanguage: 'es',
       );
-      
+
       final result2 = await translationService.translate(
         text: negativeText,
         targetLanguage: 'es',
       );
-      
+
       final result3 = await translationService.translate(
         text: neutralText,
         targetLanguage: 'es',
@@ -228,7 +229,8 @@ void main() {
 
     test('should detect formal language patterns', () async {
       // Arrange
-      const formalText = "Furthermore, I would like to discuss the consequences of this decision.";
+      const formalText =
+          "Furthermore, I would like to discuss the consequences of this decision.";
 
       // Act
       final result = await translationService.translate(
@@ -242,7 +244,8 @@ void main() {
 
     test('should detect informal language patterns', () async {
       // Arrange
-      const informalText = "Hey dude, gonna hang out later? This is totally awesome!";
+      const informalText =
+          "Hey dude, gonna hang out later? This is totally awesome!";
 
       // Act
       final result = await translationService.translate(
@@ -256,7 +259,8 @@ void main() {
 
     test('should detect business domain', () async {
       // Arrange
-      const businessText = "We need to discuss the project deadline with our client for revenue optimization.";
+      const businessText =
+          "We need to discuss the project deadline with our client for revenue optimization.";
 
       // Act
       final result = await translationService.translate(

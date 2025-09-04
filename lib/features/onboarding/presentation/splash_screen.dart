@@ -21,16 +21,16 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _logoController;
   late AnimationController _progressController;
   late AnimationController _textController;
-  
+
   late Animation<double> _logoScale;
   late Animation<double> _logoOpacity;
   late Animation<double> _progressValue;
   late Animation<double> _textOpacity;
   late Animation<Offset> _textSlide;
-  
+
   String _initializationText = 'Initializing LingoSphere...';
   double _progress = 0.0;
-  
+
   final List<String> _initSteps = [
     'Initializing LingoSphere...',
     'Loading translation engines...',
@@ -39,16 +39,16 @@ class _SplashScreenState extends State<SplashScreen>
     'Optimizing for your device...',
     'Almost ready...',
   ];
-  
+
   int _currentStep = 0;
-  
+
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
     _startInitialization();
   }
-  
+
   @override
   void dispose() {
     _logoController.dispose();
@@ -56,26 +56,26 @@ class _SplashScreenState extends State<SplashScreen>
     _textController.dispose();
     super.dispose();
   }
-  
+
   void _initializeAnimations() {
     // Logo animation controller
     _logoController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
-    
+
     // Progress animation controller
     _progressController = AnimationController(
       duration: const Duration(milliseconds: 3000),
       vsync: this,
     );
-    
+
     // Text animation controller
     _textController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    
+
     // Logo animations
     _logoScale = Tween<double>(
       begin: 0.0,
@@ -84,7 +84,7 @@ class _SplashScreenState extends State<SplashScreen>
       parent: _logoController,
       curve: Curves.elasticOut,
     ));
-    
+
     _logoOpacity = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -92,7 +92,7 @@ class _SplashScreenState extends State<SplashScreen>
       parent: _logoController,
       curve: Curves.easeInOut,
     ));
-    
+
     // Progress animation
     _progressValue = Tween<double>(
       begin: 0.0,
@@ -101,7 +101,7 @@ class _SplashScreenState extends State<SplashScreen>
       parent: _progressController,
       curve: Curves.easeInOut,
     ));
-    
+
     // Text animations
     _textOpacity = Tween<double>(
       begin: 0.0,
@@ -110,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen>
       parent: _textController,
       curve: Curves.easeInOut,
     ));
-    
+
     _textSlide = Tween<Offset>(
       begin: const Offset(0, 0.5),
       end: Offset.zero,
@@ -119,22 +119,22 @@ class _SplashScreenState extends State<SplashScreen>
       curve: Curves.easeOutCubic,
     ));
   }
-  
+
   Future<void> _startInitialization() async {
     // Start logo animation
     await Future.delayed(const Duration(milliseconds: 300));
     _logoController.forward();
-    
+
     // Wait for logo to settle
     await Future.delayed(const Duration(milliseconds: 1000));
-    
+
     // Start text animation
     _textController.forward();
-    
+
     // Start progress animation
     await Future.delayed(const Duration(milliseconds: 500));
     _progressController.forward();
-    
+
     // Simulate initialization steps
     Timer.periodic(const Duration(milliseconds: 500), (timer) {
       if (mounted && _currentStep < _initSteps.length - 1) {
@@ -143,7 +143,7 @@ class _SplashScreenState extends State<SplashScreen>
           _initializationText = _initSteps[_currentStep];
           _progress = (_currentStep + 1) / _initSteps.length;
         });
-        
+
         // Animate text change
         _textController.reset();
         _textController.forward();
@@ -153,16 +153,17 @@ class _SplashScreenState extends State<SplashScreen>
       }
     });
   }
-  
+
   Future<void> _completeInitialization() async {
     // Wait a moment before navigating
     await Future.delayed(const Duration(milliseconds: 1000));
-    
+
     if (mounted) {
       // Navigate to home screen
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const HomeScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
               opacity: animation,
@@ -183,11 +184,11 @@ class _SplashScreenState extends State<SplashScreen>
       );
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    
+
     return Scaffold(
       backgroundColor: AppTheme.primaryBlue,
       body: Container(
@@ -200,7 +201,7 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               children: [
                 const Spacer(flex: 2),
-                
+
                 // Logo Section
                 AnimationLimiter(
                   child: AnimatedBuilder(
@@ -227,7 +228,7 @@ class _SplashScreenState extends State<SplashScreen>
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.2),
+                                        color: Colors.black.withValues(alpha: 0.2),
                                         blurRadius: 20,
                                         offset: const Offset(0, 10),
                                       ),
@@ -239,9 +240,9 @@ class _SplashScreenState extends State<SplashScreen>
                                     color: AppTheme.primaryBlue,
                                   ),
                                 ),
-                                
+
                                 const SizedBox(height: 24),
-                                
+
                                 // App Name
                                 Text(
                                   AppConstants.appName,
@@ -253,15 +254,15 @@ class _SplashScreenState extends State<SplashScreen>
                                     letterSpacing: 1.2,
                                   ),
                                 ),
-                                
+
                                 const SizedBox(height: 8),
-                                
+
                                 // App Description
                                 Text(
                                   'Seamless multilingual communication',
                                   style: TextStyle(
                                     fontSize: 16,
-                                    color: AppTheme.white.withOpacity(0.9),
+                                    color: AppTheme.white.withValues(alpha: 0.9),
                                     fontFamily: AppTheme.primaryFontFamily,
                                   ),
                                   textAlign: TextAlign.center,
@@ -274,9 +275,9 @@ class _SplashScreenState extends State<SplashScreen>
                     },
                   ),
                 ),
-                
+
                 const Spacer(flex: 2),
-                
+
                 // Progress Section
                 Column(
                   children: [
@@ -292,7 +293,7 @@ class _SplashScreenState extends State<SplashScreen>
                               _initializationText,
                               style: TextStyle(
                                 fontSize: 16,
-                                color: AppTheme.white.withOpacity(0.9),
+                                color: AppTheme.white.withValues(alpha: 0.9),
                                 fontFamily: AppTheme.primaryFontFamily,
                               ),
                               textAlign: TextAlign.center,
@@ -301,9 +302,9 @@ class _SplashScreenState extends State<SplashScreen>
                         );
                       },
                     ),
-                    
+
                     const SizedBox(height: 24),
-                    
+
                     // Progress Bar
                     AnimatedBuilder(
                       animation: _progressController,
@@ -314,7 +315,7 @@ class _SplashScreenState extends State<SplashScreen>
                               width: screenSize.width * 0.6,
                               height: 6,
                               decoration: BoxDecoration(
-                                color: AppTheme.white.withOpacity(0.3),
+                                color: AppTheme.white.withValues(alpha: 0.3),
                                 borderRadius: BorderRadius.circular(3),
                               ),
                               child: LinearProgressIndicator(
@@ -326,15 +327,15 @@ class _SplashScreenState extends State<SplashScreen>
                                 borderRadius: BorderRadius.circular(3),
                               ),
                             ),
-                            
+
                             const SizedBox(height: 8),
-                            
+
                             // Progress Percentage
                             Text(
                               '${(_progressValue.value * 100).toInt()}%',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: AppTheme.white.withOpacity(0.7),
+                                color: AppTheme.white.withValues(alpha: 0.7),
                                 fontFamily: AppTheme.primaryFontFamily,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -345,15 +346,15 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                   ],
                 ),
-                
+
                 const Spacer(),
-                
+
                 // Footer
                 Text(
                   '© 2024 LingoSphere • Version ${AppConstants.appVersion}',
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppTheme.white.withOpacity(0.6),
+                    color: AppTheme.white.withValues(alpha: 0.6),
                     fontFamily: AppTheme.primaryFontFamily,
                   ),
                 ),

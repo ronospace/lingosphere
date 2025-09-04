@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "SETTLER_NOVA_PROJECT_NUMBER",
+    "project_id": "settler-nova",
+    "storage_bucket": "settler-nova.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:SETTLER_NOVA_PROJECT_NUMBER:android:LINGOSPHERE_ANDROID_APP_ID",
+        "android_client_info": {
+          "package_name": "com.lingosphere.lingosphere"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "ANDROID_CLIENT_ID.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.lingosphere.lingosphere",
+            "certificate_hash": "YOUR_CERTIFICATE_HASH"
+          }
+        },
+        {
+          "client_id": "WEB_CLIENT_ID.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "YOUR_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "WEB_CLIENT_ID.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

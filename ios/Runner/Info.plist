@@ -45,5 +45,57 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	
+	<!-- Privacy Permissions -->
+	<key>NSCameraUsageDescription</key>
+	<string>LingoSphere uses camera for visual translation and OCR features</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LingoSphere uses microphone for speech translation and voice messages</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>LingoSphere accesses photos to translate text in images</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>LingoSphere uses location for contextual translation features</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>LingoSphere uses speech recognition for voice-to-text translation</string>
+	
+	<!-- iOS 17+ Compatibility -->
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	
+	<!-- iPhone 16 Plus Support -->
+	<key>UIDeviceFamily</key>
+	<array>
+		<integer>1</integer> <!-- iPhone -->
+		<integer>2</integer> <!-- iPad -->
+	</array>
+	
+	<!-- Background Modes -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+	
+	<!-- URL Schemes for deep linking -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>lingosphere.deeplink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>lingosphere</string>
+			</array>
+		</dict>
+	</array>
+	
+	<!-- Network Security -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
 </dict>
 </plist>

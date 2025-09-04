@@ -12,15 +12,17 @@ class TranslationHistoryScreen extends ConsumerStatefulWidget {
   const TranslationHistoryScreen({super.key});
 
   @override
-  ConsumerState<TranslationHistoryScreen> createState() => _TranslationHistoryScreenState();
+  ConsumerState<TranslationHistoryScreen> createState() =>
+      _TranslationHistoryScreenState();
 }
 
-class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScreen>
+class _TranslationHistoryScreenState
+    extends ConsumerState<TranslationHistoryScreen>
     with TickerProviderStateMixin {
   late TextEditingController _searchController;
   late AnimationController _filterAnimationController;
   late TabController _tabController;
-  
+
   String _selectedFilter = 'all';
   String _selectedSort = 'recent';
   bool _showFilters = false;
@@ -90,7 +92,8 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
         case 'favorites':
           return translation.isFavorite;
         case 'recent':
-          return translation.timestamp.isAfter(DateTime.now().subtract(const Duration(days: 7)));
+          return translation.timestamp
+              .isAfter(DateTime.now().subtract(const Duration(days: 7)));
         case 'confident':
           return translation.confidence >= 0.9;
         default:
@@ -156,7 +159,9 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       title: Text(
-        _isSelectionMode ? '${_selectedItems.length} selected' : 'Translation History',
+        _isSelectionMode
+            ? '${_selectedItems.length} selected'
+            : 'Translation History',
         style: const TextStyle(
           fontWeight: FontWeight.w600,
           color: AppTheme.primaryBlue,
@@ -184,7 +189,8 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
           ),
         ] else ...[
           IconButton(
-            icon: Icon(_showFilters ? Icons.filter_list_off : Icons.filter_list),
+            icon:
+                Icon(_showFilters ? Icons.filter_list_off : Icons.filter_list),
             onPressed: _toggleFilters,
             tooltip: 'Filters',
           ),
@@ -241,7 +247,8 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
                     const SizedBox(height: 16),
                     Row(
                       children: [
-                        const Text('Filter:', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Text('Filter:',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
                         const SizedBox(width: 16),
                         Expanded(child: _buildFilterChips()),
                       ],
@@ -249,7 +256,8 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        const Text('Sort:', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Text('Sort:',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
                         const SizedBox(width: 16),
                         Expanded(child: _buildSortChips()),
                       ],
@@ -280,7 +288,7 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
           selected: isSelected,
           onSelected: (_) => setState(() => _selectedFilter = filter.$1),
           backgroundColor: AppTheme.gray100,
-          selectedColor: AppTheme.primaryBlue.withOpacity(0.1),
+          selectedColor: AppTheme.primaryBlue.withValues(alpha: 0.1),
           checkmarkColor: AppTheme.primaryBlue,
         );
       }).toList(),
@@ -304,7 +312,7 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
           selected: isSelected,
           onSelected: (_) => setState(() => _selectedSort = sort.$1),
           backgroundColor: AppTheme.gray100,
-          selectedColor: AppTheme.accentTeal.withOpacity(0.1),
+          selectedColor: AppTheme.accentTeal.withValues(alpha: 0.1),
           checkmarkColor: AppTheme.accentTeal,
         );
       }).toList(),
@@ -377,16 +385,20 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
 
   Widget _buildHistoryCard(HistoryTranslation translation) {
     final isSelected = _selectedItems.contains(translation.id);
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: isSelected ? 4 : 1,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: isSelected ? const BorderSide(color: AppTheme.primaryBlue, width: 2) : BorderSide.none,
+        side: isSelected
+            ? const BorderSide(color: AppTheme.primaryBlue, width: 2)
+            : BorderSide.none,
       ),
       child: InkWell(
-        onTap: () => _isSelectionMode ? _toggleSelection(translation.id) : _openTranslation(translation),
+        onTap: () => _isSelectionMode
+            ? _toggleSelection(translation.id)
+            : _openTranslation(translation),
         onLongPress: () => _enterSelectionMode(translation.id),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
@@ -397,9 +409,10 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryBlue.withOpacity(0.1),
+                      color: AppTheme.primaryBlue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -413,7 +426,8 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
                   ),
                   const Spacer(),
                   if (translation.isFavorite)
-                    const Icon(Icons.favorite, color: AppTheme.errorRed, size: 16),
+                    const Icon(Icons.favorite,
+                        color: AppTheme.errorRed, size: 16),
                   const SizedBox(width: 8),
                   Text(
                     _formatTimestamp(translation.timestamp),
@@ -425,8 +439,11 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
                   if (_isSelectionMode) ...[
                     const SizedBox(width: 12),
                     Icon(
-                      isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                      color: isSelected ? AppTheme.primaryBlue : AppTheme.gray400,
+                      isSelected
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
+                      color:
+                          isSelected ? AppTheme.primaryBlue : AppTheme.gray400,
                     ),
                   ],
                 ],
@@ -481,7 +498,9 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
                       ),
                       const SizedBox(width: 8),
                       _buildActionButton(
-                        translation.isFavorite ? Icons.favorite : Icons.favorite_border,
+                        translation.isFavorite
+                            ? Icons.favorite
+                            : Icons.favorite_border,
                         translation.isFavorite ? 'Unfavorite' : 'Favorite',
                         () => _toggleFavorite(translation.id),
                       ),
@@ -493,15 +512,18 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 4,
-                  children: translation.tags.map((tag) => Chip(
-                    label: Text(
-                      tag,
-                      style: const TextStyle(fontSize: 10),
-                    ),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    backgroundColor: AppTheme.gray100,
-                    side: BorderSide.none,
-                  )).toList(),
+                  children: translation.tags
+                      .map((tag) => Chip(
+                            label: Text(
+                              tag,
+                              style: const TextStyle(fontSize: 10),
+                            ),
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            backgroundColor: AppTheme.gray100,
+                            side: BorderSide.none,
+                          ))
+                      .toList(),
                 ),
               ],
             ],
@@ -511,7 +533,8 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
     );
   }
 
-  Widget _buildActionButton(IconData icon, String tooltip, VoidCallback onPressed) {
+  Widget _buildActionButton(
+      IconData icon, String tooltip, VoidCallback onPressed) {
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -654,7 +677,7 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
       }
     });
     _exitSelectionMode();
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Added to favorites'),
@@ -677,7 +700,8 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
           TextButton(
             onPressed: () {
               setState(() {
-                _allTranslations.removeWhere((t) => _selectedItems.contains(t.id));
+                _allTranslations
+                    .removeWhere((t) => _selectedItems.contains(t.id));
               });
               _exitSelectionMode();
               Navigator.pop(context);
@@ -688,7 +712,8 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
                 ),
               );
             },
-            child: const Text('Delete', style: TextStyle(color: AppTheme.errorRed)),
+            child: const Text('Delete',
+                style: TextStyle(color: AppTheme.errorRed)),
           ),
         ],
       ),
@@ -767,7 +792,7 @@ class _TranslationHistoryScreenState extends ConsumerState<TranslationHistoryScr
   String _formatTimestamp(DateTime timestamp) {
     final now = DateTime.now();
     final difference = now.difference(timestamp);
-    
+
     if (difference.inMinutes < 60) {
       return '${difference.inMinutes}m ago';
     } else if (difference.inHours < 24) {

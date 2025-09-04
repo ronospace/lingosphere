@@ -17,14 +17,14 @@ class WhatsAppService {
   final Dio _dio = Dio();
   final Logger _logger = Logger();
   final TranslationService _translationService = TranslationService();
-  
+
   String? _accessToken;
   String? _phoneNumberId;
   String? _webhookToken;
-  
+
   // Active chat sessions with translation preferences
   final Map<String, ChatSession> _activeSessions = {};
-  
+
   /// Initialize WhatsApp Business API
   Future<void> initialize({
     required String accessToken,
@@ -35,7 +35,7 @@ class WhatsAppService {
       _accessToken = accessToken;
       _phoneNumberId = phoneNumberId;
       _webhookToken = webhookToken;
-      
+
       // Configure Dio
       _dio.options = BaseOptions(
         baseUrl: AppConstants.whatsappBusinessApiUrl,
@@ -46,7 +46,7 @@ class WhatsAppService {
           'Content-Type': 'application/json',
         },
       );
-      
+
       _logger.i('WhatsApp Business API initialized successfully');
     } catch (e) {
       _logger.e('Failed to initialize WhatsApp service: $e');
@@ -56,12 +56,12 @@ class WhatsAppService {
       );
     }
   }
-  
+
   /// Handle incoming webhook from WhatsApp
   Future<void> handleWebhook(Map<String, dynamic> webhookData) async {
     try {
       _logger.d('Received WhatsApp webhook: $webhookData');
-      
+
       // Verify webhook
       if (!_verifyWebhook(webhookData)) {
         throw MessagingPlatformException(
@@ -69,14 +69,14 @@ class WhatsAppService {
           platform: 'WhatsApp',
         );
       }
-      
+
       // Process incoming messages
       final entry = webhookData['entry']?[0];
       if (entry == null) return;
-      
+
       final changes = entry['changes'];
       if (changes == null) return;
-      
+
       for (final change in changes) {
         if (change['field'] == 'messages') {
           await _processMessageChange(change['value']);
@@ -86,13 +86,13 @@ class WhatsAppService {
       _logger.e('Failed to handle WhatsApp webhook: $e');
     }
   }
-  
+
   /// Process message changes from webhook
   Future<void> _processMessageChange(Map<String, dynamic> value) async {
     try {
       final messages = value['messages'] as List?;
       if (messages == null) return;
-      
+
       for (final message in messages) {
         await _processIncomingMessage(message);
       }
@@ -100,22 +100,22 @@ class WhatsAppService {
       _logger.e('Failed to process message change: $e');
     }
   }
-  
+
   /// Process individual incoming message
   Future<void> _processIncomingMessage(Map<String, dynamic> message) async {
     try {
       final from = message['from'] as String;
       final messageId = message['id'] as String;
       final timestamp = message['timestamp'] as String;
-      
+
       // Check if user has translation enabled
       final session = _getOrCreateSession(from);
       if (!session.translationEnabled) return;
-      
+
       // Extract message text
       String? messageText;
       MessageType messageType = MessageType.text;
-      
+
       if (message['type'] == 'text') {
         messageText = message['text']['body'];
       } else if (message['type'] == 'audio') {
@@ -126,11 +126,11 @@ class WhatsAppService {
         // Skip non-text messages for now
         return;
       }
-      
+
       if (messageText == null || messageText.trim().isEmpty) return;
-      
+
       _logger.i('Processing message from $from: $messageText');
-      
+
       // Translate message
       final translationResult = await _translationService.translate(
         text: messageText,
@@ -142,25 +142,24 @@ class WhatsAppService {
           'formality': session.formalityLevel,
         },
       );
-      
+
       // Send translated message to user's private feed
       if (session.usePrivateFeed) {
         await _sendPrivateTranslation(from, translationResult, messageType);
       }
-      
+
       // Send translation overlay if enabled
       if (session.useOverlay) {
         await _sendTranslationOverlay(from, translationResult, messageType);
       }
-      
+
       // Store translation for analytics
       await _storeTranslationAnalytics(from, messageText, translationResult);
-      
     } catch (e) {
       _logger.e('Failed to process incoming message: $e');
     }
   }
-  
+
   /// Send translated message as private feed
   Future<void> _sendPrivateTranslation(
     String userId,
@@ -170,7 +169,7 @@ class WhatsAppService {
     try {
       final confidenceEmoji = _getConfidenceEmoji(translationResult.confidence);
       final sentimentEmoji = translationResult.sentiment.sentimentEmoji;
-      
+
       final privateMessage = '''
 🌐 *LingoSphere Translation* $confidenceEmoji
 
@@ -187,18 +186,17 @@ ${sentimentEmoji} *Sentiment*: ${translationResult.sentiment.sentimentString}
 
 ${messageType == MessageType.voice ? '🎙️ Voice message transcribed' : ''}
 ''';
-      
+
       await _sendMessage(
         to: userId,
         message: privateMessage,
         messageType: 'text',
       );
-      
     } catch (e) {
       _logger.e('Failed to send private translation: $e');
     }
   }
-  
+
   /// Send translation as overlay response
   Future<void> _sendTranslationOverlay(
     String userId,
@@ -212,18 +210,17 @@ ${messageType == MessageType.voice ? '🎙️ Voice message transcribed' : ''}
 
 _${translationResult.sourceLanguage} → ${translationResult.targetLanguage} via LingoSphere_
 ''';
-      
+
       await _sendMessage(
         to: userId,
         message: overlayMessage,
         messageType: 'text',
       );
-      
     } catch (e) {
       _logger.e('Failed to send translation overlay: $e');
     }
   }
-  
+
   /// Send message via WhatsApp Business API
   Future<void> _sendMessage({
     required String to,
@@ -236,16 +233,16 @@ _${translationResult.sourceLanguage} → ${translationResult.targetLanguage} via
         'messaging_product': 'whatsapp',
         'to': to,
         'type': messageType,
-        messageType: messageType == 'text' 
-          ? {'body': message}
-          : additionalData ?? {'body': message},
+        messageType: messageType == 'text'
+            ? {'body': message}
+            : additionalData ?? {'body': message},
       };
-      
+
       final response = await _dio.post(
         '/$_phoneNumberId/messages',
         data: payload,
       );
-      
+
       if (response.statusCode == 200) {
         _logger.d('Message sent successfully to $to');
       } else {
@@ -259,9 +256,10 @@ _${translationResult.sourceLanguage} → ${translationResult.targetLanguage} via
       rethrow;
     }
   }
-  
+
   /// Transcribe voice message (placeholder for actual implementation)
-  Future<String?> _transcribeVoiceMessage(Map<String, dynamic> audioData) async {
+  Future<String?> _transcribeVoiceMessage(
+      Map<String, dynamic> audioData) async {
     try {
       // This would integrate with speech-to-text service
       // For now, return a placeholder
@@ -271,7 +269,7 @@ _${translationResult.sourceLanguage} → ${translationResult.targetLanguage} via
       return null;
     }
   }
-  
+
   /// Get or create chat session
   ChatSession _getOrCreateSession(String userId) {
     if (!_activeSessions.containsKey(userId)) {
@@ -287,14 +285,14 @@ _${translationResult.sourceLanguage} → ${translationResult.targetLanguage} via
     }
     return _activeSessions[userId]!;
   }
-  
+
   /// Verify webhook signature
   bool _verifyWebhook(Map<String, dynamic> webhookData) {
     // Implement webhook verification logic here
     // For development, return true
     return true;
   }
-  
+
   /// Get confidence emoji based on translation confidence
   String _getConfidenceEmoji(dynamic confidence) {
     if (confidence == 'high') return '🎯';
@@ -302,7 +300,7 @@ _${translationResult.sourceLanguage} → ${translationResult.targetLanguage} via
     if (confidence == 'low') return '⚠️';
     return '❓';
   }
-  
+
   /// Store translation analytics
   Future<void> _storeTranslationAnalytics(
     String userId,
@@ -325,17 +323,17 @@ _${translationResult.sourceLanguage} → ${translationResult.targetLanguage} via
         'sentiment_score': translationResult.sentiment.score,
         'timestamp': DateTime.now().toIso8601String(),
       };
-      
+
       // This would be stored in Firebase or another analytics service
       _logger.d('Translation analytics: $analyticsData');
-      
     } catch (e) {
       _logger.e('Failed to store translation analytics: $e');
     }
   }
-  
+
   /// Enable translation for a user
-  Future<void> enableTranslation(String userId, {
+  Future<void> enableTranslation(
+    String userId, {
     String targetLanguage = 'en',
     bool usePrivateFeed = true,
     bool useOverlay = false,
@@ -347,9 +345,9 @@ _${translationResult.sourceLanguage} → ${translationResult.targetLanguage} via
     session.usePrivateFeed = usePrivateFeed;
     session.useOverlay = useOverlay;
     session.formalityLevel = formalityLevel;
-    
+
     _logger.i('Translation enabled for user $userId');
-    
+
     // Send welcome message
     await _sendMessage(
       to: userId,
@@ -367,16 +365,17 @@ Type */lingosphere help* for more options.
       messageType: 'text',
     );
   }
-  
+
   /// Disable translation for a user
   Future<void> disableTranslation(String userId) async {
     if (_activeSessions.containsKey(userId)) {
       _activeSessions[userId]!.translationEnabled = false;
     }
-    
+
     await _sendMessage(
       to: userId,
-      message: '🌐 LingoSphere translation disabled. Type */lingosphere start* to re-enable.',
+      message:
+          '🌐 LingoSphere translation disabled. Type */lingosphere start* to re-enable.',
       messageType: 'text',
     );
   }
@@ -393,7 +392,7 @@ class ChatSession {
   String formalityLevel;
   DateTime createdAt;
   DateTime lastActivity;
-  
+
   ChatSession({
     required this.userId,
     required this.platform,
@@ -402,9 +401,9 @@ class ChatSession {
     required this.usePrivateFeed,
     required this.useOverlay,
     required this.formalityLevel,
-  }) : createdAt = DateTime.now(),
-       lastActivity = DateTime.now();
-  
+  })  : createdAt = DateTime.now(),
+        lastActivity = DateTime.now();
+
   void updateActivity() {
     lastActivity = DateTime.now();
   }

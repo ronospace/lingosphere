@@ -8,6 +8,7 @@ import 'package:logger/logger.dart';
 import '../constants/app_constants.dart';
 import '../models/translation_models.dart';
 import '../exceptions/translation_exceptions.dart';
+import 'ai_translation_engine.dart';
 
 class TranslationService {
   static final TranslationService _instance = TranslationService._internal();
@@ -17,15 +18,20 @@ class TranslationService {
   final Dio _dio = Dio();
   final GoogleTranslator _googleTranslator = GoogleTranslator();
   final Logger _logger = Logger();
-  
+  final AITranslationEngine _aiEngine = AITranslationEngine();
+
   // Translation cache for performance
   final Map<String, CachedTranslation> _translationCache = {};
-  
+
   // API Keys (should be loaded from secure storage)
   String? _googleApiKey;
   String? _deepLApiKey;
   String? _openAIApiKey;
-  
+
+  // AI Translation Configuration
+  bool _aiTranslationEnabled = false;
+  final Map<String, List<String>> _conversationHistory = {};
+
   // Initialize service with API keys
   Future<void> initialize({
     String? googleApiKey,
@@ -35,7 +41,7 @@ class TranslationService {
     _googleApiKey = googleApiKey;
     _deepLApiKey = deepLApiKey;
     _openAIApiKey = openAIApiKey;
-    
+
     // Configure Dio with timeout and interceptors
     _dio.options = BaseOptions(
       connectTimeout: const Duration(seconds: 10),
@@ -45,17 +51,30 @@ class TranslationService {
         'User-Agent': 'LingoSphere/1.0.0',
       },
     );
-    
+
     // Add logging interceptor
     _dio.interceptors.add(LogInterceptor(
       requestBody: false,
       responseBody: false,
       logPrint: (obj) => _logger.d(obj.toString()),
     ));
-    
-    _logger.i('Translation service initialized with multiple providers');
+
+    // Initialize AI Translation Engine if OpenAI key provided
+    if (openAIApiKey != null && openAIApiKey.isNotEmpty) {
+      try {
+        await _aiEngine.initialize(openAIApiKey: openAIApiKey);
+        _aiTranslationEnabled = true;
+        _logger.i('AI Translation Engine initialized successfully');
+      } catch (e) {
+        _logger.w('AI Translation Engine initialization failed: $e');
+        _aiTranslationEnabled = false;
+      }
+    }
+
+    _logger.i(
+        'Translation service initialized with multiple providers (AI: $_aiTranslationEnabled)');
   }
-  
+
   /// Main translation method with intelligent provider selection
   Future<TranslationResult> translate({
     required String text,
@@ -69,7 +88,7 @@ class TranslationService {
       if (text.trim().isEmpty) {
         throw const InvalidTextException('Text cannot be empty');
       }
-      
+
       if (text.length > AppConstants.maxTranslationLength) {
         throw TextTooLongException(
           'Text exceeds maximum length of ${AppConstants.maxTranslationLength} characters',
@@ -77,7 +96,7 @@ class TranslationService {
           maxLength: AppConstants.maxTranslationLength,
         );
       }
-      
+
       // Check cache first
       final cacheKey = _generateCacheKey(text, sourceLanguage, targetLanguage);
       final cached = _getFromCache(cacheKey);
@@ -85,12 +104,12 @@ class TranslationService {
         _logger.d('Translation served from cache');
         return cached.result;
       }
-      
+
       // Detect source language if auto
       if (sourceLanguage == 'auto') {
         sourceLanguage = await detectLanguage(text);
       }
-      
+
       // Skip translation if source and target are the same
       if (sourceLanguage.toLowerCase() == targetLanguage.toLowerCase()) {
         return TranslationResult(
@@ -108,67 +127,73 @@ class TranslationService {
           ),
         );
       }
-      
+
       final stopwatch = Stopwatch()..start();
-      
+
       // Try multiple translation providers in order of preference
       TranslationResult? result;
-      
+
       // 1. Try DeepL API (highest quality for supported languages)
-      if (_deepLApiKey != null && _isDeepLSupported(sourceLanguage, targetLanguage)) {
+      if (_deepLApiKey != null &&
+          _isDeepLSupported(sourceLanguage, targetLanguage)) {
         try {
-          result = await _translateWithDeepL(text, sourceLanguage, targetLanguage, context);
+          result = await _translateWithDeepL(
+              text, sourceLanguage, targetLanguage, context);
           _logger.d('Translation completed with DeepL');
         } catch (e) {
           _logger.w('DeepL translation failed: $e');
         }
       }
-      
+
       // 2. Fallback to Google Translate API (more language support)
       if (result == null && _googleApiKey != null) {
         try {
-          result = await _translateWithGoogleAPI(text, sourceLanguage, targetLanguage, context);
+          result = await _translateWithGoogleAPI(
+              text, sourceLanguage, targetLanguage, context);
           _logger.d('Translation completed with Google Translate API');
         } catch (e) {
           _logger.w('Google Translate API failed: $e');
         }
       }
-      
+
       // 3. Final fallback to Google Translator package
       if (result == null) {
         try {
-          result = await _translateWithGooglePackage(text, sourceLanguage, targetLanguage, context);
+          result = await _translateWithGooglePackage(
+              text, sourceLanguage, targetLanguage, context);
           _logger.d('Translation completed with Google Translator package');
         } catch (e) {
           _logger.w('Google Translator package failed: $e');
         }
       }
-      
+
       if (result == null) {
-        throw const TranslationServiceException('All translation providers failed');
+        throw const TranslationServiceException(
+            'All translation providers failed');
       }
-      
+
       stopwatch.stop();
       result = result.copyWith(
         metadata: result.metadata.copyWith(
           processingTime: stopwatch.elapsed,
         ),
       );
-      
+
       // Cache the result
       _cacheTranslation(cacheKey, result);
-      
+
       // Log analytics
       _logTranslationAnalytics(result);
-      
+
       return result;
     } catch (e) {
       _logger.e('Translation failed: $e');
       if (e is TranslationException) rethrow;
-      throw TranslationServiceException('Translation service error: ${e.toString()}');
+      throw TranslationServiceException(
+          'Translation service error: ${e.toString()}');
     }
   }
-  
+
   /// Advanced language detection with confidence scoring
   Future<String> detectLanguage(String text) async {
     try {
@@ -177,10 +202,11 @@ class TranslationService {
       if (detectedByPattern != null) {
         return detectedByPattern;
       }
-      
+
       // Use Google's language detection via translation
       try {
-        final translation = await _googleTranslator.translate(text, from: 'auto', to: 'en');
+        final translation =
+            await _googleTranslator.translate(text, from: 'auto', to: 'en');
         final detectedLanguage = translation.sourceLanguage.code;
         if (detectedLanguage != 'auto') {
           return detectedLanguage;
@@ -188,7 +214,7 @@ class TranslationService {
       } catch (e) {
         _logger.w('Google language detection failed: $e');
       }
-      
+
       // Fallback to default
       return AppConstants.defaultSourceLanguage;
     } catch (e) {
@@ -196,7 +222,7 @@ class TranslationService {
       return AppConstants.defaultSourceLanguage;
     }
   }
-  
+
   /// Batch translation for multiple texts
   Future<List<TranslationResult>> translateBatch({
     required List<String> texts,
@@ -205,19 +231,19 @@ class TranslationService {
     Map<String, dynamic>? context,
   }) async {
     final results = <TranslationResult>[];
-    
+
     // Process in parallel with controlled concurrency
     final futures = texts.map((text) => translate(
-      text: text,
-      targetLanguage: targetLanguage,
-      sourceLanguage: sourceLanguage,
-      context: context,
-    ));
-    
+          text: text,
+          targetLanguage: targetLanguage,
+          sourceLanguage: sourceLanguage,
+          context: context,
+        ));
+
     results.addAll(await Future.wait(futures));
     return results;
   }
-  
+
   /// DeepL API translation
   Future<TranslationResult> _translateWithDeepL(
     String text,
@@ -238,18 +264,19 @@ class TranslationService {
         'formality': context?['formality'] ?? 'default',
       },
     );
-    
+
     final translations = response.data['translations'] as List;
     if (translations.isEmpty) {
-      throw const TranslationServiceException('No translation returned from DeepL');
+      throw const TranslationServiceException(
+          'No translation returned from DeepL');
     }
-    
+
     final translation = translations.first;
     final confidence = _calculateConfidence(
       translation['detected_source_language'],
       sourceLanguage,
     );
-    
+
     return TranslationResult(
       originalText: text,
       translatedText: translation['text'],
@@ -262,7 +289,7 @@ class TranslationService {
       metadata: TranslationMetadata(timestamp: DateTime.now()),
     );
   }
-  
+
   /// Google Translate API translation
   Future<TranslationResult> _translateWithGoogleAPI(
     String text,
@@ -279,15 +306,17 @@ class TranslationService {
         'format': 'text',
       },
     );
-    
+
     final translations = response.data['data']['translations'] as List;
     if (translations.isEmpty) {
-      throw const TranslationServiceException('No translation returned from Google API');
+      throw const TranslationServiceException(
+          'No translation returned from Google API');
     }
-    
+
     final translation = translations.first;
-    final detectedLanguage = translation['detectedSourceLanguage'] ?? sourceLanguage;
-    
+    final detectedLanguage =
+        translation['detectedSourceLanguage'] ?? sourceLanguage;
+
     return TranslationResult(
       originalText: text,
       translatedText: translation['translatedText'],
@@ -300,7 +329,7 @@ class TranslationService {
       metadata: TranslationMetadata(timestamp: DateTime.now()),
     );
   }
-  
+
   /// Google Translator package translation
   Future<TranslationResult> _translateWithGooglePackage(
     String text,
@@ -313,7 +342,7 @@ class TranslationService {
       from: sourceLanguage == 'auto' ? 'auto' : sourceLanguage,
       to: targetLanguage,
     );
-    
+
     return TranslationResult(
       originalText: text,
       translatedText: translation.text,
@@ -326,14 +355,14 @@ class TranslationService {
       metadata: TranslationMetadata(timestamp: DateTime.now()),
     );
   }
-  
+
   /// AI-powered sentiment analysis
   Future<SentimentAnalysis> _analyzeSentiment(String text) async {
     try {
       // Simple emoji-based sentiment detection
       double sentimentScore = 0.0;
       int emojiCount = 0;
-      
+
       for (final entry in LanguagePatterns.emojiSentiment.entries) {
         final count = entry.key.allMatches(text).length;
         if (count > 0) {
@@ -341,25 +370,40 @@ class TranslationService {
           emojiCount += count;
         }
       }
-      
+
       if (emojiCount > 0) {
         sentimentScore /= emojiCount;
       }
-      
+
       // Analyze text patterns for additional context
-      final positiveWords = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic'];
-      final negativeWords = ['bad', 'terrible', 'awful', 'horrible', 'disappointing'];
-      
+      final positiveWords = [
+        'good',
+        'great',
+        'excellent',
+        'amazing',
+        'wonderful',
+        'fantastic'
+      ];
+      final negativeWords = [
+        'bad',
+        'terrible',
+        'awful',
+        'horrible',
+        'disappointing'
+      ];
+
       final lowerText = text.toLowerCase();
-      final positiveCount = positiveWords.where((word) => lowerText.contains(word)).length;
-      final negativeCount = negativeWords.where((word) => lowerText.contains(word)).length;
-      
+      final positiveCount =
+          positiveWords.where((word) => lowerText.contains(word)).length;
+      final negativeCount =
+          negativeWords.where((word) => lowerText.contains(word)).length;
+
       if (positiveCount > negativeCount) {
         sentimentScore += 0.3;
       } else if (negativeCount > positiveCount) {
         sentimentScore -= 0.3;
       }
-      
+
       // Determine sentiment category
       SentimentType sentiment;
       if (sentimentScore > 0.2) {
@@ -369,7 +413,7 @@ class TranslationService {
       } else {
         sentiment = SentimentType.neutral;
       }
-      
+
       return SentimentAnalysis(
         sentiment: sentiment,
         score: sentimentScore.clamp(-1.0, 1.0),
@@ -384,7 +428,7 @@ class TranslationService {
       );
     }
   }
-  
+
   /// Context analysis for better translations
   Future<ContextAnalysis> _analyzeContext(
     String text,
@@ -398,7 +442,7 @@ class TranslationService {
         slangLevel: _detectSlangLevel(text),
         additionalContext: additionalContext ?? {},
       );
-      
+
       return analysis;
     } catch (e) {
       _logger.w('Context analysis failed: $e');
@@ -411,32 +455,33 @@ class TranslationService {
       );
     }
   }
-  
+
   /// Pattern-based language detection for quick identification
   String? _detectLanguageByPattern(String text) {
     final lowerText = text.toLowerCase();
-    
+
     for (final entry in LanguagePatterns.slangPatterns.entries) {
       final language = entry.key;
       final patterns = entry.value;
-      
-      final matches = patterns.where((pattern) => lowerText.contains(pattern)).length;
+
+      final matches =
+          patterns.where((pattern) => lowerText.contains(pattern)).length;
       if (matches >= 2) {
         return language;
       }
     }
-    
+
     return null;
   }
-  
+
   /// Detect formality level in text
   FormalityLevel _detectFormality(String text) {
     final lowerText = text.toLowerCase();
-    
+
     // Check for formal patterns
     int formalScore = 0;
     int informalScore = 0;
-    
+
     for (final patterns in LanguagePatterns.formalPatterns.values) {
       for (final pattern in patterns) {
         if (lowerText.contains(pattern.toLowerCase())) {
@@ -444,7 +489,7 @@ class TranslationService {
         }
       }
     }
-    
+
     for (final patterns in LanguagePatterns.slangPatterns.values) {
       for (final pattern in patterns) {
         if (lowerText.contains(pattern.toLowerCase())) {
@@ -452,7 +497,7 @@ class TranslationService {
         }
       }
     }
-    
+
     if (formalScore > informalScore) {
       return FormalityLevel.formal;
     } else if (informalScore > formalScore) {
@@ -461,16 +506,28 @@ class TranslationService {
       return FormalityLevel.neutral;
     }
   }
-  
+
   /// Detect text domain/topic
   TextDomain _detectDomain(String text) {
     final lowerText = text.toLowerCase();
-    
+
     // Simple keyword-based domain detection
-    final businessKeywords = ['meeting', 'project', 'deadline', 'client', 'revenue'];
-    final techKeywords = ['api', 'database', 'algorithm', 'software', 'programming'];
+    final businessKeywords = [
+      'meeting',
+      'project',
+      'deadline',
+      'client',
+      'revenue'
+    ];
+    final techKeywords = [
+      'api',
+      'database',
+      'algorithm',
+      'software',
+      'programming'
+    ];
     final casualKeywords = ['hang out', 'chill', 'party', 'fun', 'friend'];
-    
+
     if (businessKeywords.any((keyword) => lowerText.contains(keyword))) {
       return TextDomain.business;
     } else if (techKeywords.any((keyword) => lowerText.contains(keyword))) {
@@ -478,14 +535,14 @@ class TranslationService {
     } else if (casualKeywords.any((keyword) => lowerText.contains(keyword))) {
       return TextDomain.casual;
     }
-    
+
     return TextDomain.general;
   }
-  
+
   /// Detect cultural markers in text
   List<String> _detectCulturalMarkers(String text) {
     final markers = <String>[];
-    
+
     // Simple cultural marker detection
     if (text.contains('🇺🇸') || text.contains('america')) {
       markers.add('us_culture');
@@ -496,16 +553,16 @@ class TranslationService {
     if (text.contains('🇪🇸') || text.contains('spain')) {
       markers.add('spanish_culture');
     }
-    
+
     return markers;
   }
-  
+
   /// Calculate slang level in text
   double _detectSlangLevel(String text) {
     final lowerText = text.toLowerCase();
     int slangCount = 0;
     int totalWords = text.split(' ').length;
-    
+
     for (final patterns in LanguagePatterns.slangPatterns.values) {
       for (final pattern in patterns) {
         if (lowerText.contains(pattern.toLowerCase())) {
@@ -513,18 +570,28 @@ class TranslationService {
         }
       }
     }
-    
+
     return totalWords > 0 ? slangCount / totalWords : 0.0;
   }
-  
+
   /// Check if language pair is supported by DeepL
   bool _isDeepLSupported(String source, String target) {
     final deepLLanguages = [
-      'en', 'de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'ru', 'ja', 'zh'
+      'en',
+      'de',
+      'fr',
+      'es',
+      'pt',
+      'it',
+      'nl',
+      'pl',
+      'ru',
+      'ja',
+      'zh'
     ];
     return deepLLanguages.contains(source) && deepLLanguages.contains(target);
   }
-  
+
   /// Map language codes to DeepL format
   String _mapToDeepLCode(String languageCode) {
     final mapping = {
@@ -542,21 +609,22 @@ class TranslationService {
     };
     return mapping[languageCode] ?? languageCode.toUpperCase();
   }
-  
+
   /// Calculate translation confidence
   TranslationConfidence _calculateConfidence(String detected, String expected) {
-    if (expected == 'auto' || detected.toLowerCase() == expected.toLowerCase()) {
+    if (expected == 'auto' ||
+        detected.toLowerCase() == expected.toLowerCase()) {
       return TranslationConfidence.high;
     } else {
       return TranslationConfidence.medium;
     }
   }
-  
+
   /// Generate cache key
   String _generateCacheKey(String text, String source, String target) {
     return '${text.hashCode}_${source}_${target}';
   }
-  
+
   /// Get translation from cache
   CachedTranslation? _getFromCache(String key) {
     final cached = _translationCache[key];
@@ -566,15 +634,16 @@ class TranslationService {
     _translationCache.remove(key);
     return null;
   }
-  
+
   /// Cache translation result
   void _cacheTranslation(String key, TranslationResult result) {
     _translationCache[key] = CachedTranslation(
       result: result,
       cachedAt: DateTime.now(),
-      expiresAfter: const Duration(days: AppConstants.translationCacheExpiration),
+      expiresAfter:
+          const Duration(days: AppConstants.translationCacheExpiration),
     );
-    
+
     // Clean up old cache entries
     if (_translationCache.length > 1000) {
       final oldestKeys = _translationCache.entries
@@ -582,13 +651,13 @@ class TranslationService {
           .map((entry) => entry.key)
           .take(200)
           .toList();
-      
+
       for (final key in oldestKeys) {
         _translationCache.remove(key);
       }
     }
   }
-  
+
   /// Log translation analytics
   void _logTranslationAnalytics(TranslationResult result) {
     try {
@@ -602,19 +671,19 @@ class TranslationService {
       _logger.w('Failed to log analytics: $e');
     }
   }
-  
+
   /// Clear translation cache
   void clearCache() {
     _translationCache.clear();
     _logger.i('Translation cache cleared');
   }
-  
+
   /// Get cache statistics
   Map<String, dynamic> getCacheStats() {
-    final now = DateTime.now();
-    final validEntries = _translationCache.values.where((cached) => !cached.isExpired).length;
+    final validEntries =
+        _translationCache.values.where((cached) => !cached.isExpired).length;
     final expiredEntries = _translationCache.length - validEntries;
-    
+
     return {
       'total_entries': _translationCache.length,
       'valid_entries': validEntries,
@@ -622,11 +691,262 @@ class TranslationService {
       'cache_hit_ratio': validEntries / (_translationCache.length + 1),
     };
   }
-  
+
+  // ===== AI TRANSLATION METHODS =====
+
+  /// Advanced contextual translation using AI engine
+  Future<AITranslationResult> translateWithContext({
+    required String text,
+    required String targetLanguage,
+    String sourceLanguage = 'auto',
+    TranslationDomain domain = TranslationDomain.general,
+    QualityLevel quality = QualityLevel.balanced,
+    Map<String, dynamic>? context,
+    String? sessionId,
+  }) async {
+    if (!_aiTranslationEnabled) {
+      throw const TranslationServiceException(
+          'AI Translation Engine not available');
+    }
+
+    // Detect source language if auto
+    if (sourceLanguage == 'auto') {
+      sourceLanguage = await detectLanguage(text);
+    }
+
+    // Get conversation history for this session
+    final conversationKey = sessionId ?? '${sourceLanguage}_${targetLanguage}';
+    final previousConversation = _conversationHistory[conversationKey] ?? [];
+
+    // Create contextual translation request
+    final request = ContextualTranslationRequest(
+      text: text,
+      sourceLanguage: sourceLanguage,
+      targetLanguage: targetLanguage,
+      domain: domain,
+      quality: quality,
+      context: context ?? {},
+      previousConversation: previousConversation,
+    );
+
+    try {
+      final result = await _aiEngine.translateWithContext(request);
+
+      // Update conversation history
+      _updateConversationHistory(conversationKey, text, result.translatedText);
+
+      return result;
+    } catch (e) {
+      _logger.e('AI contextual translation failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Translate with automatic domain detection
+  Future<AITranslationResult> translateWithDomainDetection({
+    required String text,
+    required String targetLanguage,
+    String sourceLanguage = 'auto',
+    QualityLevel quality = QualityLevel.balanced,
+    Map<String, dynamic>? context,
+    String? sessionId,
+  }) async {
+    // Use general domain for automatic detection by AI engine
+    return translateWithContext(
+      text: text,
+      targetLanguage: targetLanguage,
+      sourceLanguage: sourceLanguage,
+      domain: TranslationDomain.general, // Will be auto-detected by AI
+      quality: quality,
+      context: context,
+      sessionId: sessionId,
+    );
+  }
+
+  /// Translate conversation with context continuity
+  Future<AITranslationResult> translateConversation({
+    required String text,
+    required String targetLanguage,
+    required String conversationId,
+    String sourceLanguage = 'auto',
+    TranslationDomain domain = TranslationDomain.casual,
+    Map<String, dynamic>? context,
+  }) async {
+    return translateWithContext(
+      text: text,
+      targetLanguage: targetLanguage,
+      sourceLanguage: sourceLanguage,
+      domain: domain,
+      quality: QualityLevel.balanced,
+      context: context,
+      sessionId: conversationId,
+    );
+  }
+
+  /// Translate business content with formal tone
+  Future<AITranslationResult> translateBusiness({
+    required String text,
+    required String targetLanguage,
+    String sourceLanguage = 'auto',
+    Map<String, dynamic>? context,
+  }) async {
+    return translateWithContext(
+      text: text,
+      targetLanguage: targetLanguage,
+      sourceLanguage: sourceLanguage,
+      domain: TranslationDomain.business,
+      quality: QualityLevel.premium,
+      context: {
+        ...?context,
+        'formality': 'formal',
+        'tone': 'professional',
+      },
+    );
+  }
+
+  /// Translate technical content with precision
+  Future<AITranslationResult> translateTechnical({
+    required String text,
+    required String targetLanguage,
+    String sourceLanguage = 'auto',
+    Map<String, dynamic>? context,
+  }) async {
+    return translateWithContext(
+      text: text,
+      targetLanguage: targetLanguage,
+      sourceLanguage: sourceLanguage,
+      domain: TranslationDomain.technical,
+      quality: QualityLevel.premium,
+      context: {
+        ...?context,
+        'preserve_terminology': true,
+        'accuracy_priority': true,
+      },
+    );
+  }
+
+  /// Translate casual content with natural tone
+  Future<AITranslationResult> translateCasual({
+    required String text,
+    required String targetLanguage,
+    String sourceLanguage = 'auto',
+    Map<String, dynamic>? context,
+  }) async {
+    return translateWithContext(
+      text: text,
+      targetLanguage: targetLanguage,
+      sourceLanguage: sourceLanguage,
+      domain: TranslationDomain.casual,
+      quality: QualityLevel.fast,
+      context: {
+        ...?context,
+        'formality': 'casual',
+        'preserve_slang': true,
+      },
+    );
+  }
+
+  /// Get translation alternatives and suggestions
+  Future<List<String>> getTranslationAlternatives({
+    required String text,
+    required String targetLanguage,
+    String sourceLanguage = 'auto',
+    int maxAlternatives = 3,
+  }) async {
+    if (!_aiTranslationEnabled) {
+      return [];
+    }
+
+    try {
+      final result = await translateWithDomainDetection(
+        text: text,
+        targetLanguage: targetLanguage,
+        sourceLanguage: sourceLanguage,
+        quality: QualityLevel.premium,
+      );
+
+      return result.alternativeTranslations.take(maxAlternatives).toList();
+    } catch (e) {
+      _logger.w('Failed to get translation alternatives: $e');
+      return [];
+    }
+  }
+
+  /// Get cultural context and notes for translation
+  Future<CulturalContext?> getCulturalContext({
+    required String text,
+    required String targetLanguage,
+    String sourceLanguage = 'auto',
+  }) async {
+    if (!_aiTranslationEnabled) {
+      return null;
+    }
+
+    try {
+      final result = await translateWithDomainDetection(
+        text: text,
+        targetLanguage: targetLanguage,
+        sourceLanguage: sourceLanguage,
+        quality: QualityLevel.premium,
+      );
+
+      return result.culturalNotes;
+    } catch (e) {
+      _logger.w('Failed to get cultural context: $e');
+      return null;
+    }
+  }
+
+  /// Update conversation history for context continuity
+  void _updateConversationHistory(
+      String sessionKey, String original, String translated) {
+    _conversationHistory.putIfAbsent(sessionKey, () => []);
+
+    final entry = '$original -> $translated';
+    _conversationHistory[sessionKey]!.add(entry);
+
+    // Keep only last 10 entries per session
+    if (_conversationHistory[sessionKey]!.length > 10) {
+      _conversationHistory[sessionKey]!.removeAt(0);
+    }
+  }
+
+  /// Clear conversation history for a session
+  void clearConversationHistory([String? sessionId]) {
+    if (sessionId != null) {
+      _conversationHistory.remove(sessionId);
+    } else {
+      _conversationHistory.clear();
+    }
+    _logger
+        .i('Conversation history cleared for session: ${sessionId ?? "all"}');
+  }
+
+  /// Get AI translation capabilities status
+  Map<String, dynamic> getAICapabilities() {
+    return {
+      'ai_enabled': _aiTranslationEnabled,
+      'contextual_translation': _aiTranslationEnabled,
+      'domain_detection': _aiTranslationEnabled,
+      'conversation_memory': _aiTranslationEnabled,
+      'cultural_insights': _aiTranslationEnabled,
+      'alternatives_generation': _aiTranslationEnabled,
+      'active_conversations': _conversationHistory.length,
+    };
+  }
+
+  /// Enable or disable AI translation features
+  void setAITranslationEnabled(bool enabled) {
+    _aiTranslationEnabled = enabled && _openAIApiKey != null;
+    _logger
+        .i('AI Translation ${_aiTranslationEnabled ? "enabled" : "disabled"}');
+  }
+
   /// Dispose service
   void dispose() {
     _dio.close();
     _translationCache.clear();
+    _conversationHistory.clear();
     _logger.i('Translation service disposed');
   }
 }

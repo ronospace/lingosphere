@@ -1,5 +1,5 @@
-# Uncomment this line to define a global platform for your project
-platform :ios, '13.0'
+# LingoSphere iOS Podfile - Xcode 16.4 Compatible
+platform :ios, '18.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -29,27 +29,85 @@ flutter_ios_podfile_setup
 
 target 'Runner' do
   use_frameworks!
-
+  use_modular_headers!
+  
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  
   target 'RunnerTests' do
     inherit! :search_paths
   end
 end
 
 post_install do |installer|
+  # Apply Flutter's standard configuration per target
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
-    
-    # Ensure minimum iOS deployment target
+  end
+  
+  # Apply aggressive compiler flag fixes for Xcode 16+
+  installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      # Set minimum iOS deployment target for all pods
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '18.0'
       
-      # Fix simulator architecture issues
-      config.build_settings['ONLY_ACTIVE_ARCH'] = 'YES'
-      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'i386'
-      
-      # Disable bitcode for compatibility
+      # Disable bitcode
       config.build_settings['ENABLE_BITCODE'] = 'NO'
+      
+      # Completely remove debug information generation to avoid -G flags
+      config.build_settings['DEBUG_INFORMATION_FORMAT'] = ''
+      config.build_settings['DWARF_DSYM_FOLDER_PATH'] = ''
+      config.build_settings['DWARF_DSYM_FILE_NAME'] = ''
+      
+      # Remove all potential -G flag sources
+      gcc_flags = [
+        'OTHER_CFLAGS', 'OTHER_CPLUSPLUSFLAGS', 'OTHER_CXXFLAGS',
+        'WARNING_CFLAGS', 'GCC_WARN_INHIBIT_ALL_WARNINGS',
+        'CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS',
+        'GCC_PREPROCESSOR_DEFINITIONS'
+      ]
+      
+      gcc_flags.each do |setting|
+        if config.build_settings[setting]
+          flags = config.build_settings[setting]
+          if flags.is_a?(Array)
+            flags = flags.reject { |flag| flag.to_s.match?(/^-G/) }
+          elsif flags.is_a?(String)
+            flags = flags.gsub(/-G\S*\s*/, '')
+          end
+          config.build_settings[setting] = flags
+        end
+      end
+      
+      # Explicitly disable all debug flags that might trigger -G
+      config.build_settings['GCC_GENERATE_DEBUGGING_SYMBOLS'] = 'NO'
+      config.build_settings['STRIP_INSTALLED_PRODUCT'] = 'NO'
+      config.build_settings['COPY_PHASE_STRIP'] = 'NO'
+      config.build_settings['STRIP_STYLE'] = 'debugging'
+      
+      # Fix architecture exclusions for newer simulators
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'i386'
+      config.build_settings['VALID_ARCHS[sdk=iphonesimulator*]'] = 'arm64 x86_64'
+      
+      # Force compiler to not use any -G flags
+      config.build_settings['OTHER_CFLAGS'] = (config.build_settings['OTHER_CFLAGS'] || []) + ['-w']
     end
   end
+  
+  # Post-process all generated xcconfig files
+  Dir.glob("Pods/**/*.xcconfig") do |file|
+    next unless File.exist?(file)
+    
+    content = File.read(file)
+    original = content.dup
+    
+    # Remove all -G flags and related options
+    content.gsub!(/-G[a-zA-Z0-9_]*\s*/, '')
+    content.gsub!(/GCC_GENERATE_DEBUGGING_SYMBOLS\s*=\s*YES/, 'GCC_GENERATE_DEBUGGING_SYMBOLS = NO')
+    content.gsub!(/DEBUG_INFORMATION_FORMAT\s*=\s*[^\n]*/, 'DEBUG_INFORMATION_FORMAT = ')
+    content.gsub!(/EXCLUDED_ARCHS\[sdk=iphonesimulator\*\]\s*=\s*arm64/, 'EXCLUDED_ARCHS[sdk=iphonesimulator*] = i386')
+    
+    File.write(file, content) if content != original
+  end
+  
+  puts "✅ Applied aggressive compiler flag fixes for Xcode 16+ compatibility"
 end

@@ -1,12 +1,24 @@
 // 🌐 LingoSphere - Advanced Translation Screen
 // Comprehensive translation interface with real-time processing and AI insights
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/translation_service.dart';
+import '../../../core/services/voice_service.dart';
+import '../../../core/services/advanced_ai_service.dart';
+import '../../../core/models/translation_models.dart';
+import '../../../core/models/ai_models.dart';
+import '../../../core/exceptions/translation_exceptions.dart';
+import '../../camera/presentation/camera_translation_screen.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'dart:convert';
+import 'dart:async';
 
 class TranslationScreen extends ConsumerStatefulWidget {
   final String? initialText;
@@ -38,16 +50,36 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
   bool _isTranslating = false;
   bool _hasTranslation = false;
   TranslationResult? _currentTranslation;
-  
+
   final FocusNode _sourceFocusNode = FocusNode();
   final FocusNode _targetFocusNode = FocusNode();
+  
+  // Voice input state
+  final VoiceService _voiceService = VoiceService();
+  bool _isListening = false;
+  bool _voiceInitialized = false;
+  StreamSubscription<VoiceRecognitionResult>? _voiceSubscription;
+  
+  // Advanced AI state
+  final AdvancedAIService _aiService = AdvancedAIService();
+  bool _aiInitialized = false;
+  List<SmartSuggestion> _aiSuggestions = [];
+  bool _isLoadingAISuggestions = false;
+  UserPersonality? _userPersonality;
+  
+  // Enhanced translation state
+  Timer? _debounceTimer;
+  List<TranslationResult> _translationHistory = [];
+  List<String> _alternativeTranslations = [];
+  bool _realTimeTranslationEnabled = true;
+  bool _isLoadingAlternatives = false;
 
   @override
   void initState() {
     super.initState();
     _sourceController = TextEditingController(text: widget.initialText ?? '');
     _targetController = TextEditingController();
-    
+
     _selectedSourceLanguage = widget.sourceLanguage ?? 'auto';
     _selectedTargetLanguage = widget.targetLanguage ?? 'en';
 
@@ -70,6 +102,9 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
     );
 
     _sourceController.addListener(_onSourceTextChanged);
+    _initializeVoiceService();
+    _initializeAIService();
+    _loadTranslationHistory();
   }
 
   @override
@@ -80,6 +115,9 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
     _swapAnimationController.dispose();
     _sourceFocusNode.dispose();
     _targetFocusNode.dispose();
+    _voiceSubscription?.cancel();
+    _voiceService.dispose();
+    _debounceTimer?.cancel();
     super.dispose();
   }
 
@@ -155,6 +193,10 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
               _buildTranslationDetails(),
               const SizedBox(height: 20),
               _buildAlternativeTranslations(),
+              if (_aiSuggestions.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                _buildAISuggestions(),
+              ],
             ],
             const SizedBox(height: 80), // Bottom padding for action bar
           ],
@@ -185,9 +227,10 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppTheme.vibrantGreen.withOpacity(0.1),
+                    color: AppTheme.vibrantGreen.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
@@ -206,19 +249,24 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
               children: [
                 Expanded(child: _buildLanguageDropdown(true)),
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
                   child: AnimatedBuilder(
                     animation: _swapAnimation,
                     builder: (context, child) {
                       return Transform.rotate(
                         angle: _swapAnimation.value * 3.14159,
-                        child: FloatingActionButton.small(
-                          onPressed: _swapLanguages,
-                          backgroundColor: AppTheme.accentTeal,
-                          child: const Icon(
-                            Icons.swap_horiz,
-                            color: AppTheme.white,
-                            size: 20,
+                        child: SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: FloatingActionButton(
+                            onPressed: _swapLanguages,
+                            backgroundColor: AppTheme.accentTeal,
+                            mini: true,
+                            child: const Icon(
+                              Icons.swap_horiz,
+                              color: AppTheme.white,
+                              size: 16,
+                            ),
                           ),
                         ),
                       );
@@ -237,7 +285,7 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
   Widget _buildLanguageDropdown(bool isSource) {
     final value = isSource ? _selectedSourceLanguage : _selectedTargetLanguage;
     final label = isSource ? 'From' : 'To';
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -338,31 +386,42 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
               ],
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _sourceController,
-              focusNode: _sourceFocusNode,
-              maxLines: 6,
-              maxLength: AppConstants.maxTranslationLength,
-              decoration: const InputDecoration(
-                hintText: 'Type or paste text to translate...',
-                border: InputBorder.none,
-                counterText: '',
-                hintStyle: TextStyle(color: AppTheme.gray400),
+            Container(
+              constraints: const BoxConstraints(minHeight: 120),
+              child: TextField(
+                controller: _sourceController,
+                focusNode: _sourceFocusNode,
+                maxLines: null,
+                minLines: 4,
+                maxLength: AppConstants.maxTranslationLength,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                decoration: const InputDecoration(
+                  hintText: 'Type or paste text to translate...',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  counterText: '',
+                  hintStyle: TextStyle(color: AppTheme.gray400),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                style: const TextStyle(
+                  fontSize: 16,
+                  height: 1.4,
+                  color: AppTheme.gray900,
+                ),
+                onChanged: (_) => _debounceTranslation(),
+                autofocus: false,
+                enabled: true,
               ),
-              style: const TextStyle(
-                fontSize: 16,
-                height: 1.4,
-                color: AppTheme.gray900,
-              ),
-              onChanged: (_) => _debounceTranslation(),
             ),
             const SizedBox(height: 12),
             Row(
               children: [
                 _buildInputAction(
-                  Icons.mic,
-                  'Voice Input',
-                  AppTheme.vibrantGreen,
+                  _isListening ? Icons.stop : Icons.mic,
+                  _isListening ? 'Stop Recording' : 'Voice Input',
+                  _isListening ? AppTheme.errorRed : AppTheme.vibrantGreen,
                   _startVoiceInput,
                 ),
                 const SizedBox(width: 12),
@@ -418,7 +477,7 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, color: color, size: 20),
@@ -437,12 +496,15 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: _isTranslating ? AppTheme.vibrantGreen : AppTheme.primaryBlue,
+              color:
+                  _isTranslating ? AppTheme.vibrantGreen : AppTheme.primaryBlue,
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: (_isTranslating ? AppTheme.vibrantGreen : AppTheme.primaryBlue)
-                      .withOpacity(0.3),
+                  color: (_isTranslating
+                          ? AppTheme.vibrantGreen
+                          : AppTheme.primaryBlue)
+                      .withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -496,9 +558,12 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
                 const Spacer(),
                 if (_currentTranslation != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: _getConfidenceColor(_currentTranslation!.confidence).withOpacity(0.1),
+                      color: _getConfidenceColorFromEnum(
+                              _currentTranslation!.confidence)
+                          .withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -507,15 +572,17 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
                         Icon(
                           Icons.verified,
                           size: 12,
-                          color: _getConfidenceColor(_currentTranslation!.confidence),
+                          color: _getConfidenceColorFromEnum(
+                              _currentTranslation!.confidence),
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${(_currentTranslation!.confidence * 100).toInt()}%',
+                          '${_currentTranslation!.confidencePercentage.toInt()}%',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: _getConfidenceColor(_currentTranslation!.confidence),
+                            color: _getConfidenceColorFromEnum(
+                                _currentTranslation!.confidence),
                           ),
                         ),
                       ],
@@ -622,7 +689,8 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
             opacity: _translationAnimation.value,
             child: Card(
               elevation: 1,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -698,12 +766,9 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
   }
 
   Widget _buildAlternativeTranslations() {
-    // Mock alternative translations for demonstration
-    final alternatives = [
-      'Hi, how are you doing?',
-      'Hey, how are you?',
-      'Hello, how do you do?',
-    ];
+    if (_alternativeTranslations.isEmpty && !_isLoadingAlternatives) {
+      return const SizedBox.shrink();
+    }
 
     return Card(
       elevation: 1,
@@ -728,9 +793,17 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
               ],
             ),
             const SizedBox(height: 12),
-            ...alternatives.asMap().entries.map((entry) {
-              final index = entry.key;
-              final alternative = entry.value;
+            if (_isLoadingAlternatives)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              ..._alternativeTranslations.asMap().entries.map((entry) {
+                final index = entry.key;
+                final alternative = entry.value;
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: InkWell(
@@ -738,7 +811,8 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: AppTheme.gray50,
                       borderRadius: BorderRadius.circular(8),
@@ -749,7 +823,7 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
                           width: 20,
                           height: 20,
                           decoration: BoxDecoration(
-                            color: AppTheme.accentTeal.withOpacity(0.1),
+                            color: AppTheme.accentTeal.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: Center(
@@ -797,7 +871,7 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
         color: AppTheme.white,
         boxShadow: [
           BoxShadow(
-            color: AppTheme.gray200.withOpacity(0.5),
+            color: AppTheme.gray200.withValues(alpha: 0.5),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
@@ -820,8 +894,8 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
             Expanded(
               flex: 2,
               child: ElevatedButton.icon(
-                onPressed: _sourceController.text.isEmpty || _isTranslating 
-                    ? null 
+                onPressed: _sourceController.text.isEmpty || _isTranslating
+                    ? null
                     : _performTranslation,
                 icon: _isTranslating
                     ? const SizedBox(
@@ -852,12 +926,12 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
     _swapAnimationController.forward().then((_) {
       _swapAnimationController.reset();
     });
-    
+
     setState(() {
       final temp = _selectedSourceLanguage;
       _selectedSourceLanguage = _selectedTargetLanguage;
       _selectedTargetLanguage = temp;
-      
+
       // Swap text content if both exist
       if (_hasTranslation && _sourceController.text.isNotEmpty) {
         final tempText = _sourceController.text;
@@ -865,98 +939,181 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
         _targetController.text = tempText;
       }
     });
-    
+
     if (_sourceController.text.isNotEmpty) {
       _performTranslation();
     }
   }
 
   void _debounceTranslation() {
-    // Implement debounced translation
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (_sourceController.text.isNotEmpty && mounted) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (_sourceController.text.trim().isNotEmpty && mounted && _realTimeTranslationEnabled) {
         _performTranslation();
       }
     });
   }
 
-  void _performTranslation() {
-    if (_sourceController.text.trim().isEmpty) return;
+  Future<void> _performTranslation() async {
+    final input = _sourceController.text.trim();
+    if (input.isEmpty) return;
 
     setState(() => _isTranslating = true);
     _translationAnimationController.forward();
 
-    // Simulate translation with delay
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _isTranslating = false;
-          _hasTranslation = true;
-          _targetController.text = _mockTranslate(_sourceController.text);
-          _currentTranslation = TranslationResult(
-            originalText: _sourceController.text,
-            translatedText: _targetController.text,
-            sourceLanguage: _selectedSourceLanguage,
-            targetLanguage: _selectedTargetLanguage,
-            confidence: 0.95,
-            provider: 'google_api',
-            sentiment: SentimentAnalysis(
-              sentiment: SentimentType.neutral,
-              score: 0.1,
-              confidence: 85.0,
-            ),
-            context: ContextAnalysis(
-              formality: FormalityLevel.neutral,
-              domain: TextDomain.general,
-              culturalMarkers: ['casual_greeting'],
-              slangLevel: 0.2,
-              additionalContext: {},
-            ),
-            metadata: TranslationMetadata(
-              timestamp: DateTime.now(),
-              processingTime: const Duration(milliseconds: 1500),
+    try {
+      final result = await TranslationService().translate(
+        text: input,
+        sourceLanguage: _selectedSourceLanguage,
+        targetLanguage: _selectedTargetLanguage,
+        mode: TranslationMode.realTime,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isTranslating = false;
+        _hasTranslation = true;
+        _currentTranslation = result;
+        _targetController.text = result.translatedText;
+      });
+      _translationAnimationController.forward();
+      
+      // Save to history and load alternatives
+      _saveToHistory(result);
+      _loadAlternativeTranslations();
+      _loadAISuggestions();
+    } on TranslationException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isTranslating = false;
+        _hasTranslation = false;
+        _currentTranslation = null;
+        _targetController.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.userMessage),
+          backgroundColor: AppTheme.errorRed,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isTranslating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Translation failed. Please try again.'),
+          backgroundColor: AppTheme.errorRed,
+        ),
+      );
+    }
+  }
+
+  Future<void> _initializeVoiceService() async {
+    try {
+      await _voiceService.initialize();
+      setState(() => _voiceInitialized = true);
+    } catch (e) {
+      // Voice service initialization failed - continue without voice input
+    }
+  }
+  
+  Future<void> _startVoiceInput() async {
+    if (!_voiceInitialized) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Voice input not available'),
+          backgroundColor: AppTheme.errorRed,
+        ),
+      );
+      return;
+    }
+
+    if (_isListening) {
+      await _stopVoiceInput();
+      return;
+    }
+
+    try {
+      setState(() => _isListening = true);
+      
+      // Start listening with current settings
+      await _voiceService.startListening(
+        targetLanguage: _selectedTargetLanguage,
+        enableRealTimeTranslation: false, // We'll handle translation separately
+      );
+
+      // Listen to recognition results
+      _voiceSubscription = _voiceService.recognitionStream.listen(
+        (result) {
+          if (result.isFinal && result.text.trim().isNotEmpty) {
+            // Set the recognized text in the source field
+            setState(() {
+              _sourceController.text = result.text;
+              _isListening = false;
+            });
+            
+            // Trigger translation
+            _debounceTranslation();
+            
+            // Stop listening after getting final result
+            _stopVoiceInput();
+          } else if (!result.isFinal) {
+            // Show partial results in real-time
+            setState(() {
+              _sourceController.text = result.text;
+            });
+          }
+        },
+        onError: (error) {
+          setState(() => _isListening = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Voice recognition error: ${error.toString()}'),
+              backgroundColor: AppTheme.errorRed,
             ),
           );
-        });
-        _translationAnimationController.forward();
-      }
-    });
+        },
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Listening... Speak now'),
+          backgroundColor: AppTheme.vibrantGreen,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      setState(() => _isListening = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to start voice input: ${e.toString()}'),
+          backgroundColor: AppTheme.errorRed,
+        ),
+      );
+    }
   }
 
-  String _mockTranslate(String text) {
-    // Mock translation logic
-    final translations = {
-      'hello': 'hola',
-      'how are you': 'como estas',
-      'good morning': 'buenos dias',
-      'thank you': 'gracias',
-      'goodbye': 'adios',
-    };
-    
-    final lowerText = text.toLowerCase();
-    for (final entry in translations.entries) {
-      if (lowerText.contains(entry.key)) {
-        return text.toLowerCase().replaceAll(entry.key, entry.value);
+  Future<void> _stopVoiceInput() async {
+    if (_isListening) {
+      try {
+        await _voiceService.stopListening();
+        setState(() => _isListening = false);
+        await _voiceSubscription?.cancel();
+        _voiceSubscription = null;
+      } catch (e) {
+        // Handle error silently
       }
     }
-    
-    return 'Mock translation of: $text';
-  }
-
-  void _startVoiceInput() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Voice input feature coming soon!'),
-        backgroundColor: AppTheme.vibrantGreen,
-      ),
-    );
   }
 
   void _startCameraOCR() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Camera OCR feature coming soon!'),
-        backgroundColor: AppTheme.accentTeal,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const CameraTranslationScreen(
+          targetLanguage: null, // Will use current selection
+        ),
       ),
     );
   }
@@ -969,13 +1126,42 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
     }
   }
 
-  void _playAudio() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Audio playback feature coming soon!'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+  void _playAudio() async {
+    if (_hasTranslation && _targetController.text.isNotEmpty) {
+      try {
+        // Import the voice service
+        final voiceService = VoiceService();
+        
+        // Speak the translated text in the target language
+        await voiceService.speak(
+          _targetController.text,
+          language: _selectedTargetLanguage,
+        );
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Playing audio...'),
+            duration: Duration(seconds: 1),
+            backgroundColor: AppTheme.vibrantGreen,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Audio playback failed: ${e.toString()}'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No translation to play'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
   }
 
   void _copyTranslation() {
@@ -1069,10 +1255,16 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
     );
   }
 
-  Color _getConfidenceColor(double confidence) {
-    if (confidence >= 0.9) return AppTheme.successGreen;
-    if (confidence >= 0.7) return AppTheme.warningAmber;
-    return AppTheme.errorRed;
+  Color _getConfidenceColorFromEnum(TranslationConfidence confidence) {
+    switch (confidence) {
+      case TranslationConfidence.high:
+        return AppTheme.successGreen;
+      case TranslationConfidence.medium:
+        return AppTheme.warningAmber;
+      case TranslationConfidence.low:
+      case TranslationConfidence.uncertain:
+        return AppTheme.errorRed;
+    }
   }
 
   String _getSentimentText(SentimentAnalysis sentiment) {
@@ -1096,71 +1288,477 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
         return Icons.sentiment_neutral;
     }
   }
+
+  // Enhanced translation functionality methods
+  Future<void> _loadTranslationHistory() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/translation_history.json');
+      
+      if (await file.exists()) {
+        final jsonString = await file.readAsString();
+        final List<dynamic> jsonList = json.decode(jsonString);
+        _translationHistory = jsonList
+            .map((json) => TranslationResult.fromJson(json))
+            .toList();
+      }
+    } catch (e) {
+      // Silent failure - history loading is non-critical
+    }
+  }
+
+  Future<void> _saveToHistory(TranslationResult result) async {
+    try {
+      // Add to beginning of history (most recent first)
+      _translationHistory.insert(0, result);
+      
+      // Keep only last 50 translations to avoid excessive storage
+      if (_translationHistory.length > 50) {
+        _translationHistory = _translationHistory.take(50).toList();
+      }
+      
+      // Save to device storage
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/translation_history.json');
+      final jsonString = json.encode(
+        _translationHistory.map((e) => e.toJson()).toList(),
+      );
+      await file.writeAsString(jsonString);
+    } catch (e) {
+      // Silent failure - saving to history is non-critical
+    }
+  }
+
+  Future<void> _loadAlternativeTranslations() async {
+    if (_currentTranslation == null) return;
+    
+    setState(() => _isLoadingAlternatives = true);
+    
+    try {
+      // Generate alternative translations using different providers or methods
+      final alternatives = await _generateAlternativeTranslations(
+        _currentTranslation!.originalText,
+        _selectedSourceLanguage,
+        _selectedTargetLanguage,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _alternativeTranslations = alternatives;
+          _isLoadingAlternatives = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _alternativeTranslations = [];
+          _isLoadingAlternatives = false;
+        });
+      }
+    }
+  }
+
+  Future<List<String>> _generateAlternativeTranslations(
+    String text,
+    String sourceLang,
+    String targetLang,
+  ) async {
+    final List<String> alternatives = [];
+    final translationService = TranslationService();
+    
+    try {
+      // Try different translation contexts for variations
+      final contexts = [
+        {'style': 'formal'},
+        {'style': 'casual'},
+        {'style': 'professional'},
+      ];
+      
+      for (final context in contexts) {
+        try {
+          final result = await translationService.translate(
+            text: text,
+            sourceLanguage: sourceLang,
+            targetLanguage: targetLang,
+            context: context,
+          );
+          
+          // Only add if different from main translation
+          if (result.translatedText != _currentTranslation?.translatedText &&
+              !alternatives.contains(result.translatedText)) {
+            alternatives.add(result.translatedText);
+          }
+        } catch (e) {
+          // Skip this alternative if it fails
+        }
+      }
+      
+      // If no alternatives were found, add some mock alternatives
+      // for demonstration (in production, you might use ML models)
+      if (alternatives.isEmpty && _currentTranslation != null) {
+        alternatives.addAll(_generateMockAlternatives(_currentTranslation!.translatedText));
+      }
+      
+      return alternatives.take(3).toList(); // Limit to 3 alternatives
+    } catch (e) {
+      return [];
+    }
+  }
+
+  List<String> _generateMockAlternatives(String originalTranslation) {
+    // This is a simple mock implementation
+    // In production, you would use more sophisticated methods
+    final alternatives = <String>[];
+    
+    // Add some variations based on common patterns
+    if (originalTranslation.toLowerCase().contains('hello')) {
+      alternatives.addAll([
+        originalTranslation.replaceAll(RegExp('hello', caseSensitive: false), 'Hi'),
+        originalTranslation.replaceAll(RegExp('hello', caseSensitive: false), 'Hey'),
+      ]);
+    }
+    
+    if (originalTranslation.toLowerCase().contains('thank you')) {
+      alternatives.addAll([
+        originalTranslation.replaceAll(RegExp('thank you', caseSensitive: false), 'thanks'),
+        originalTranslation.replaceAll(RegExp('thank you', caseSensitive: false), 'much appreciated'),
+      ]);
+    }
+    
+    // Remove duplicates and original
+    return alternatives
+        .where((alt) => alt != originalTranslation)
+        .toSet()
+        .toList();
+  }
+
+  // Advanced AI Integration Methods
+
+  Future<void> _initializeAIService() async {
+    try {
+      await _aiService.initialize(
+        openAIApiKey: const String.fromEnvironment('OPENAI_API_KEY'),
+        claudeApiKey: const String.fromEnvironment('CLAUDE_API_KEY'),
+        geminiApiKey: const String.fromEnvironment('GEMINI_API_KEY'),
+      );
+      setState(() => _aiInitialized = true);
+      
+      // Load user personality if available
+      _loadUserPersonality();
+    } catch (e) {
+      // AI service initialization failed - continue without AI features
+    }
+  }
+
+  Future<void> _loadUserPersonality() async {
+    if (!_aiInitialized) return;
+    
+    try {
+      final personality = await _aiService.analyzeUserPersonality(
+        userId: 'default_user', // Would use actual user ID
+        recentTranslations: _translationHistory.take(10).toList(),
+      );
+      
+      setState(() {
+        _userPersonality = personality;
+      });
+    } catch (e) {
+      // Personality analysis failed - continue without personality features
+    }
+  }
+
+  Future<void> _loadAISuggestions() async {
+    if (!_aiInitialized || _currentTranslation == null) return;
+    
+    setState(() => _isLoadingAISuggestions = true);
+    
+    try {
+      final suggestions = await _aiService.generateContextualSuggestions(
+        text: _currentTranslation!.originalText,
+        sourceLanguage: _selectedSourceLanguage,
+        targetLanguage: _selectedTargetLanguage,
+        conversationId: 'translation_session',
+        additionalContext: {
+          'screen': 'translation',
+          'user_personality': _userPersonality?.primaryType.name,
+        },
+      );
+      
+      if (mounted) {
+        setState(() {
+          _aiSuggestions = suggestions;
+          _isLoadingAISuggestions = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _aiSuggestions = [];
+          _isLoadingAISuggestions = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildAISuggestions() {
+    if (_aiSuggestions.isEmpty && !_isLoadingAISuggestions) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.vibrantGreen.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome,
+                    size: 16,
+                    color: AppTheme.vibrantGreen,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'AI Smart Suggestions',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.gray700,
+                  ),
+                ),
+                const Spacer(),
+                if (_userPersonality != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryBlue.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _userPersonality!.primaryType.name.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.primaryBlue,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_isLoadingAISuggestions)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      CircularProgressIndicator(strokeWidth: 2),
+                      SizedBox(height: 8),
+                      Text(
+                        'AI is analyzing context...',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.gray500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ..._aiSuggestions.asMap().entries.map((entry) {
+                final index = entry.key;
+                final suggestion = entry.value;
+                return _buildAISuggestionItem(suggestion, index);
+              }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAISuggestionItem(SmartSuggestion suggestion, int index) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: InkWell(
+        onTap: () => _selectAISuggestion(suggestion),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _getSuggestionContextColor(suggestion.context).withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _getSuggestionContextColor(suggestion.context).withValues(alpha: 0.2),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: _getSuggestionContextColor(suggestion.context).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${index + 1}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _getSuggestionContextColor(suggestion.context),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      suggestion.text,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.gray900,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _getConfidenceColor(suggestion.confidence).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '${(suggestion.confidence * 100).toInt()}%',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: _getConfidenceColor(suggestion.confidence),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (suggestion.reasoning.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.lightbulb_outline,
+                      size: 14,
+                      color: _getSuggestionContextColor(suggestion.context),
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        suggestion.reasoning,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.gray600,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppTheme.gray100,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Text(
+                      suggestion.source.toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.gray600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: _getSuggestionContextColor(suggestion.context).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Text(
+                      suggestion.context.name.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w600,
+                        color: _getSuggestionContextColor(suggestion.context),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getSuggestionContextColor(SuggestionContext context) {
+    switch (context) {
+      case SuggestionContext.contextual:
+        return AppTheme.vibrantGreen;
+      case SuggestionContext.alternative:
+        return AppTheme.accentTeal;
+      case SuggestionContext.creative:
+        return AppTheme.warningAmber;
+      case SuggestionContext.formal:
+        return AppTheme.primaryBlue;
+      case SuggestionContext.casual:
+        return Colors.purple;
+      case SuggestionContext.standard:
+        return AppTheme.gray600;
+    }
+  }
+
+  Color _getConfidenceColor(double confidence) {
+    if (confidence >= 0.9) return AppTheme.successGreen;
+    if (confidence >= 0.7) return AppTheme.vibrantGreen;
+    if (confidence >= 0.5) return AppTheme.warningAmber;
+    return AppTheme.errorRed;
+  }
+
+  void _selectAISuggestion(SmartSuggestion suggestion) {
+    setState(() {
+      _targetController.text = suggestion.text;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('AI suggestion selected: ${suggestion.source} (${(suggestion.confidence * 100).toInt()}% confidence)'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: _getSuggestionContextColor(suggestion.context),
+      ),
+    );
+    
+    // Log AI suggestion usage for analytics
+    // Would integrate with Firebase Analytics here
+  }
 }
-
-// Import these from the existing models
-class TranslationResult {
-  final String originalText;
-  final String translatedText;
-  final String sourceLanguage;
-  final String targetLanguage;
-  final double confidence;
-  final String provider;
-  final SentimentAnalysis sentiment;
-  final ContextAnalysis context;
-  final TranslationMetadata metadata;
-
-  TranslationResult({
-    required this.originalText,
-    required this.translatedText,
-    required this.sourceLanguage,
-    required this.targetLanguage,
-    required this.confidence,
-    required this.provider,
-    required this.sentiment,
-    required this.context,
-    required this.metadata,
-  });
-}
-
-class SentimentAnalysis {
-  final SentimentType sentiment;
-  final double score;
-  final double confidence;
-
-  SentimentAnalysis({
-    required this.sentiment,
-    required this.score,
-    required this.confidence,
-  });
-}
-
-class ContextAnalysis {
-  final FormalityLevel formality;
-  final TextDomain domain;
-  final List<String> culturalMarkers;
-  final double slangLevel;
-  final Map<String, dynamic> additionalContext;
-
-  ContextAnalysis({
-    required this.formality,
-    required this.domain,
-    required this.culturalMarkers,
-    required this.slangLevel,
-    required this.additionalContext,
-  });
-}
-
-class TranslationMetadata {
-  final DateTime timestamp;
-  final Duration? processingTime;
-
-  TranslationMetadata({
-    required this.timestamp,
-    this.processingTime,
-  });
-}
-
-enum SentimentType { positive, negative, neutral }
-enum FormalityLevel { formal, informal, neutral }
-enum TextDomain { general, business, technical, casual }
